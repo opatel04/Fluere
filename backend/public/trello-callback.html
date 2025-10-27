@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trello Authorization - TaskSnap</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 48px;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 24px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+        }
+
+        .icon.success {
+            background: #10b981;
+            color: white;
+        }
+
+        .icon.error {
+            background: #ef4444;
+            color: white;
+        }
+
+        h1 {
+            font-size: 28px;
+            color: #1f2937;
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+
+        p {
+            font-size: 16px;
+            color: #6b7280;
+            line-height: 1.6;
+            margin-bottom: 24px;
+        }
+
+        .error-details {
+            background: #fee2e2;
+            border-left: 4px solid #ef4444;
+            padding: 16px;
+            border-radius: 8px;
+            text-align: left;
+            margin-bottom: 24px;
+        }
+
+        .error-details pre {
+            color: #991b1b;
+            font-size: 14px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #5568d3;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Loading State -->
+        <div id="loading">
+            <div class="spinner"></div>
+            <h1>Connecting to Trello...</h1>
+            <p>Please wait while we complete the authorization.</p>
+        </div>
+
+        <!-- Success State -->
+        <div id="success" class="hidden">
+            <div class="icon success">✓</div>
+            <h1>Successfully Connected!</h1>
+            <p>Your Trello account has been connected to TaskSnap. You can now close this window.</p>
+            <a href="javascript:window.close()" class="btn">Close Window</a>
+        </div>
+
+        <!-- Error State -->
+        <div id="error" class="hidden">
+            <div class="icon error">✕</div>
+            <h1>Authorization Failed</h1>
+            <p id="error-message">Something went wrong during authorization.</p>
+            <div id="error-details" class="error-details hidden">
+                <pre id="error-content"></pre>
+            </div>
+            <a href="javascript:window.close()" class="btn">Close Window</a>
+        </div>
+    </div>
+
+    <script>
+        // Extract parameters from URL fragment
+        function getFragmentParams() {
+            try {
+                const hash = window.location.hash.substring(1); // Remove #
+                if (!hash) return { token: null, error: null };
+
+                const params = new URLSearchParams(hash);
+                return {
+                    token: params.get('token'),
+                    error: params.get('error')
+                };
+            } catch (e) {
+                console.error('Error parsing fragment:', e);
+                return { token: null, error: null };
+            }
+        }
+
+        // Extract state from query string
+        function getQueryParams() {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                return {
+                    state: params.get('state')
+                };
+            } catch (e) {
+                console.error('Error parsing query:', e);
+                return { state: null };
+            }
+        }
+
+        // Show success state
+        function showSuccess() {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('success').classList.remove('hidden');
+
+            // Redirect to OAuth dashboard after 1 second
+            setTimeout(() => {
+                window.location.href = '/oauth-dashboard.html?trello=success';
+            }, 1000);
+        }
+
+        // Show error state
+        function showError(message, details = null) {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('error').classList.remove('hidden');
+            document.getElementById('error-message').textContent = message;
+
+            if (details) {
+                document.getElementById('error-details').classList.remove('hidden');
+                document.getElementById('error-content').textContent = JSON.stringify(details, null, 2);
+            }
+
+            // Redirect to OAuth dashboard with error after 3 seconds
+            setTimeout(() => {
+                window.location.href = `/oauth-dashboard.html?trello=error&message=${encodeURIComponent(message)}`;
+            }, 3000);
+        }
+
+        // Send token to backend
+        async function sendTokenToBackend(token, userId) {
+            try {
+                console.log('Sending token to backend:', { token: token.substring(0, 10) + '...', userId });
+
+                const response = await fetch(`/api/v1/auth/trello/callback?token=${encodeURIComponent(token)}&state=${encodeURIComponent(userId)}`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                console.log('Response status:', response.status);
+                const data = await response.json();
+                console.log('Response data:', data);
+
+                if (response.ok && data.success) {
+                    showSuccess();
+                } else {
+                    showError(
+                        data.error || 'Failed to save Trello authorization',
+                        data
+                    );
+                }
+            } catch (error) {
+                console.error('Error sending token:', error);
+                showError(
+                    'Network error: Could not connect to server',
+                    { message: error.message }
+                );
+            }
+        }
+
+        // Main authorization flow
+        async function handleAuthorization() {
+            console.log('Starting authorization flow...');
+            console.log('Full URL:', window.location.href);
+            console.log('Hash:', window.location.hash);
+            console.log('Search:', window.location.search);
+
+            const fragmentParams = getFragmentParams();
+            const queryParams = getQueryParams();
+
+            console.log('Fragment params:', fragmentParams);
+            console.log('Query params:', queryParams);
+
+            // Check for OAuth errors
+            if (fragmentParams.error) {
+                console.error('OAuth error found:', fragmentParams.error);
+                showError(
+                    'Trello authorization was denied or failed',
+                    { error: fragmentParams.error }
+                );
+                return;
+            }
+
+            // Check for token
+            if (!fragmentParams.token) {
+                console.error('No token found in fragment');
+                showError(
+                    'No authorization token received from Trello',
+                    {
+                        message: 'Token not found in URL fragment',
+                        url: window.location.href
+                    }
+                );
+                return;
+            }
+
+            // Get user ID from state parameter, or use default
+            const userId = queryParams.state || 'temp_user_id';
+            console.log('Using userId:', userId);
+
+            // Send to backend
+            await sendTokenToBackend(fragmentParams.token, userId);
+        }
+
+        // Run on page load
+        handleAuthorization();
+
+        // Timeout after 10 seconds if nothing happens
+        setTimeout(() => {
+            const loading = document.getElementById('loading');
+            if (!loading.classList.contains('hidden')) {
+                showError('Timeout: Authorization took too long', { timeout: true });
+            }
+        }, 10000);
+    </script>
+</body>
+</html>

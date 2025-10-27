@@ -1,0 +1,130 @@
+<svg viewBox="0 0 500 350" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .demo-bg { fill: #1C1C1C; }
+      .app-window { fill: #0A0A0A; stroke: #4ADE80; stroke-width: 2; }
+      .input-area { fill: #272727; stroke: #4ADE80; stroke-width: 1; }
+      .output-area { fill: #0A0A0A; stroke: #4ADE80; stroke-width: 1; }
+      .demo-text { fill: #F4F4F5; font-family: Arial, sans-serif; font-size: 8px; }
+      .messy-text { fill: #A1A1AA; font-family: Arial, sans-serif; font-size: 7px; }
+      .clean-text { fill: #4ADE80; font-family: Arial, sans-serif; font-size: 7px; }
+      .button { fill: #4ADE80; }
+      .button-text { fill: #0A0A0A; font-family: Arial, sans-serif; font-size: 8px; font-weight: bold; }
+      .arrow { fill: none; stroke: #4ADE80; stroke-width: 2; }
+    </style>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="500" height="350" class="demo-bg"/>
+  
+  <!-- App Window -->
+  <rect x="50" y="50" width="400" height="250" class="app-window" rx="12"/>
+  
+  <!-- Header -->
+  <rect x="60" y="60" width="380" height="30" fill="#272727" rx="6"/>
+  <text x="240" y="78" text-anchor="middle" class="demo-text" font-size="12" fill="#4ADE80">TaskSnap - AI Task Organizer</text>
+  
+  <!-- Input Section -->
+  <text x="70" y="110" class="demo-text" font-size="10" fill="#F4F4F5">Paste your messy notes:</text>
+  <rect x="70" y="115" width="180" height="80" class="input-area" rx="8"/>
+  
+  <!-- Messy input text -->
+  <text x="75" y="128" class="messy-text">buy groceries tomorrow</text>
+  <text x="75" y="138" class="messy-text">meeting with john 3pm friday??</text>
+  <text x="75" y="148" class="messy-text">call mom sometime this week</text>
+  <text x="75" y="158" class="messy-text">finish project proposal URGENT</text>
+  <text x="75" y="168" class="messy-text">dentist appointment when was it</text>
+  <text x="75" y="178" class="messy-text">pay bills before month end</text>
+  <text x="75" y="188" class="messy-text">gym membership renewal</text>
+  
+  <!-- Transform Button -->
+  <rect x="270" y="150" width="80" height="25" class="button" rx="12"/>
+  <text x="310" y="165" text-anchor="middle" class="button-text">Transform</text>
+  
+  <!-- Magic Arrow -->
+  <g class="arrow">
+    <path d="M350,162 L370,162">
+      <animate attributeName="opacity" values="0.3;1;0.3" dur="1.5s" repeatCount="indefinite"/>
+    </path>
+    <path d="M365,157 L370,162 L365,167"/>
+  </g>
+  
+  <!-- Output Section -->
+  <text x="270" y="110" class="demo-text" font-size="10" fill="#F4F4F5">Organized tasks:</text>
+  <rect x="270" y="115" width="170" height="80" class="output-area" rx="8"/>
+  
+  <!-- Clean organized tasks -->
+  <g transform="translate(275, 125)">
+    <!-- High Priority -->
+    <rect x="0" y="0" width="160" height="12" fill="#EF4444" opacity="0.2" rx="6"/>
+    <circle cx="6" cy="6" r="3" fill="#EF4444"/>
+    <text x="15" y="8" class="clean-text" font-size="6">🔥 Finish project proposal - Today</text>
+  </g>
+  
+  <g transform="translate(275, 140)">
+    <!-- Medium Priority -->
+    <rect x="0" y="0" width="160" height="12" fill="#F59E0B" opacity="0.2" rx="6"/>
+    <circle cx="6" cy="6" r="3" fill="#F59E0B"/>
+    <text x="15" y="8" class="clean-text" font-size="6">📅 Meeting with John - Fri 3PM</text>
+  </g>
+  
+  <g transform="translate(275, 155)">
+    <!-- Medium Priority -->
+    <rect x="0" y="0" width="160" height="12" fill="#F59E0B" opacity="0.2" rx="6"/>
+    <circle cx="6" cy="6" r="3" fill="#F59E0B"/>
+    <text x="15" y="8" class="clean-text" font-size="6">💰 Pay bills - Before month end</text>
+  </g>
+  
+  <g transform="translate(275, 170)">
+    <!-- Low Priority -->
+    <rect x="0" y="0" width="160" height="12" fill="#10B981" opacity="0.2" rx="6"/>
+    <circle cx="6" cy="6" r="3" fill="#10B981"/>
+    <text x="15" y="8" class="clean-text" font-size="6">🛒 Buy groceries - Tomorrow</text>
+  </g>
+  
+  <g transform="translate(275, 185)">
+    <!-- Low Priority -->
+    <rect x="0" y="0" width="160" height="12" fill="#10B981" opacity="0.2" rx="6"/>
+    <circle cx="6" cy="6" r="3" fill="#10B981"/>
+    <text x="15" y="8" class="clean-text" font-size="6">📞 Call mom - This week</text>
+  </g>
+  
+  <!-- Stats -->
+  <g transform="translate(70, 220)">
+    <text x="0" y="0" class="demo-text" font-size="9" fill="#4ADE80">✨ Processed in 1.2s</text>
+    <text x="120" y="0" class="demo-text" font-size="9" fill="#4ADE80">📊 5 tasks organized</text>
+    <text x="240" y="0" class="demo-text" font-size="9" fill="#4ADE80">🎯 3 priorities assigned</text>
+  </g>
+  
+  <!-- Floating AI indicators -->
+  <g transform="translate(160, 140)">
+    <circle cx="0" cy="0" r="15" fill="#4ADE80" opacity="0.1">
+      <animate attributeName="r" values="10;20;10" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <text x="0" y="3" text-anchor="middle" class="demo-text" font-size="10" fill="#4ADE80">AI</text>
+  </g>
+  
+  <!-- Processing indicators -->
+  <g stroke="#4ADE80" stroke-width="1" fill="none" opacity="0.6">
+    <circle cx="200" cy="130" r="3">
+      <animate attributeName="opacity" values="0.2;0.8;0.2" dur="1s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="210" cy="135" r="3">
+      <animate attributeName="opacity" values="0.2;0.8;0.2" dur="1s" repeatCount="indefinite" begin="0.2s"/>
+    </circle>
+    <circle cx="220" cy="140" r="3">
+      <animate attributeName="opacity" values="0.2;0.8;0.2" dur="1s" repeatCount="indefinite" begin="0.4s"/>
+    </circle>
+  </g>
+  
+  <!-- Success checkmarks -->
+  <g transform="translate(420, 130)" opacity="0.7">
+    <circle cx="0" cy="0" r="8" fill="#4ADE80" opacity="0.3"/>
+    <path d="M-3,0 L-1,2 L3,-2" fill="none" stroke="#4ADE80" stroke-width="2"/>
+  </g>
+  
+  <g transform="translate(420, 150)" opacity="0.7">
+    <circle cx="0" cy="0" r="8" fill="#4ADE80" opacity="0.3"/>
+    <path d="M-3,0 L-1,2 L3,-2" fill="none" stroke="#4ADE80" stroke-width="2"/>
+  </g>
+</svg>

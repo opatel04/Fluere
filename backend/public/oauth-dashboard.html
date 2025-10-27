@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TaskSnap - OAuth Dashboard</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: white;
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 2.5rem;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+
+    .service-header {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .service-icon {
+      width: 50px;
+      height: 50px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+    }
+
+    .gmail-icon {
+      background: #EA4335;
+      color: white;
+    }
+
+    .trello-icon {
+      background: #0079BF;
+      color: white;
+    }
+
+    .service-title {
+      flex: 1;
+    }
+
+    .service-title h2 {
+      color: #1f2937;
+      font-size: 1.5rem;
+      margin-bottom: 5px;
+    }
+
+    .service-title p {
+      color: #6b7280;
+      font-size: 0.9rem;
+    }
+
+    .status-badge {
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+
+    .status-connected {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .status-disconnected {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .status-loading {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .user-info {
+      background: #f9fafb;
+      padding: 15px;
+      border-radius: 8px;
+      margin: 15px 0;
+      display: none;
+    }
+
+    .user-info.active {
+      display: block;
+    }
+
+    .user-info p {
+      color: #374151;
+      margin: 5px 0;
+    }
+
+    .user-info strong {
+      color: #1f2937;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    button {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: all 0.3s;
+      flex: 1;
+    }
+
+    .btn-connect {
+      background: #667eea;
+      color: white;
+    }
+
+    .btn-connect:hover {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-disconnect {
+      background: #ef4444;
+      color: white;
+    }
+
+    .btn-disconnect:hover {
+      background: #dc2626;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+    }
+
+    .btn-refresh {
+      background: #10b981;
+      color: white;
+      flex: 0.5;
+    }
+
+    .btn-refresh:hover {
+      background: #059669;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    .info-banner {
+      background: #eff6ff;
+      border-left: 4px solid #3b82f6;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    .info-banner p {
+      color: #1e40af;
+      margin: 5px 0;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .error-message {
+      background: #fee2e2;
+      color: #991b1b;
+      padding: 12px;
+      border-radius: 8px;
+      margin-top: 15px;
+      display: none;
+    }
+
+    .error-message.active {
+      display: block;
+    }
+
+    .success-message {
+      background: #d1fae5;
+      color: #065f46;
+      padding: 12px;
+      border-radius: 8px;
+      margin-top: 15px;
+      display: none;
+    }
+
+    .success-message.active {
+      display: block;
+    }
+
+    @media (max-width: 768px) {
+      .button-group {
+        flex-direction: column;
+      }
+
+      .btn-refresh {
+        flex: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔐 OAuth Dashboard</h1>
+
+    <div class="info-banner">
+      <p><strong>Welcome to TaskSnap OAuth Dashboard</strong></p>
+      <p>Connect your Gmail and Trello accounts to enable automated email-to-task conversion.</p>
+      <p><strong>Your User ID:</strong> <span id="userId">temp_user_id</span></p>
+    </div>
+
+    <!-- Gmail Card -->
+    <div class="card">
+      <div class="service-header">
+        <div class="service-icon gmail-icon">📧</div>
+        <div class="service-title">
+          <h2>Gmail</h2>
+          <p>Connect to read and process emails</p>
+        </div>
+        <div class="status-badge status-loading" id="gmailStatus">
+          <span class="loading-spinner"></span> Checking...
+        </div>
+      </div>
+
+      <div class="user-info" id="gmailInfo">
+        <p><strong>Email:</strong> <span id="gmailEmail">-</span></p>
+        <p><strong>Name:</strong> <span id="gmailName">-</span></p>
+        <p><strong>Connected:</strong> <span id="gmailConnectedDate">-</span></p>
+      </div>
+
+      <div class="success-message" id="gmailSuccess"></div>
+      <div class="error-message" id="gmailError"></div>
+
+      <div class="button-group">
+        <button class="btn-connect" id="gmailConnectBtn" onclick="connectGmail()">
+          Connect Gmail
+        </button>
+        <button class="btn-disconnect" id="gmailDisconnectBtn" onclick="disconnectGmail()" style="display:none;">
+          Disconnect
+        </button>
+        <button class="btn-refresh" id="gmailRefreshBtn" onclick="checkGmailStatus(this)">
+          🔄 Refresh
+        </button>
+      </div>
+    </div>
+
+    <!-- Trello Card -->
+    <div class="card">
+      <div class="service-header">
+        <div class="service-icon trello-icon">📋</div>
+        <div class="service-title">
+          <h2>Trello</h2>
+          <p>Connect to create and manage cards</p>
+        </div>
+        <div class="status-badge status-loading" id="trelloStatus">
+          <span class="loading-spinner"></span> Checking...
+        </div>
+      </div>
+
+      <div class="user-info" id="trelloInfo">
+        <p><strong>Connected:</strong> <span id="trelloConnectedDate">-</span></p>
+      </div>
+
+      <div class="success-message" id="trelloSuccess"></div>
+      <div class="error-message" id="trelloError"></div>
+
+      <div class="button-group">
+        <button class="btn-connect" id="trelloConnectBtn" onclick="connectTrello()">
+          Connect Trello
+        </button>
+        <button class="btn-disconnect" id="trelloDisconnectBtn" onclick="disconnectTrello()" style="display:none;">
+          Disconnect
+        </button>
+        <button class="btn-refresh" id="trelloRefreshBtn" onclick="checkTrelloStatus(this)">
+          🔄 Refresh
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:3000/api/v1';
+    const USER_ID = 'temp_user_id'; // In production, get from session/auth
+
+    // Check connection status on page load
+    window.addEventListener('load', () => {
+      handleOAuthCallback();
+      checkGmailStatus();
+      checkTrelloStatus();
+    });
+
+    // Handle OAuth callback (if returning from provider)
+    function handleOAuthCallback() {
+      const urlParams = new URLSearchParams(window.location.search);
+
+      // Check for Gmail callback
+      const gmailStatus = urlParams.get('gmail');
+      if (gmailStatus === 'success') {
+        showSuccess('gmail', 'Gmail connected successfully!');
+        checkGmailStatus();
+      } else if (gmailStatus === 'error') {
+        const message = urlParams.get('message') || 'Failed to connect Gmail';
+        showError('gmail', decodeURIComponent(message));
+      }
+
+      // Check for Trello callback
+      const trelloStatus = urlParams.get('trello');
+      if (trelloStatus === 'success') {
+        showSuccess('trello', 'Trello connected successfully!');
+        checkTrelloStatus();
+      } else if (trelloStatus === 'error') {
+        const message = urlParams.get('message') || 'Failed to connect Trello';
+        showError('trello', decodeURIComponent(message));
+      }
+
+      // Clean URL if callback params exist
+      if (gmailStatus || trelloStatus) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+
+    async function checkGmailStatus(refreshBtn = null) {
+      const statusEl = document.getElementById('gmailStatus');
+      const connectBtn = document.getElementById('gmailConnectBtn');
+      const disconnectBtn = document.getElementById('gmailDisconnectBtn');
+      const infoEl = document.getElementById('gmailInfo');
+
+      try {
+        // Show loading state
+        if (refreshBtn) {
+          refreshBtn.disabled = true;
+          refreshBtn.innerHTML = '<span class="loading-spinner"></span> Refreshing...';
+        }
+
+        statusEl.className = 'status-badge status-loading';
+        statusEl.innerHTML = '<span class="loading-spinner"></span> Checking...';
+
+        const response = await fetch(`${API_BASE}/auth/gmail/status?userId=${USER_ID}`);
+        const data = await response.json();
+
+        if (data.success && data.data.connected) {
+          statusEl.className = 'status-badge status-connected';
+          statusEl.textContent = '✓ Connected';
+          connectBtn.style.display = 'none';
+          disconnectBtn.style.display = 'block';
+          infoEl.classList.add('active');
+
+          if (refreshBtn) {
+            showSuccess('gmail', 'Status refreshed successfully');
+          }
+        } else {
+          statusEl.className = 'status-badge status-disconnected';
+          statusEl.textContent = '✗ Not Connected';
+          connectBtn.style.display = 'block';
+          disconnectBtn.style.display = 'none';
+          infoEl.classList.remove('active');
+
+          if (refreshBtn) {
+            showSuccess('gmail', 'Status refreshed - not connected');
+          }
+        }
+      } catch (error) {
+        statusEl.className = 'status-badge status-disconnected';
+        statusEl.textContent = '✗ Error';
+        showError('gmail', 'Error checking status: ' + error.message);
+      } finally {
+        // Reset button state
+        if (refreshBtn) {
+          refreshBtn.disabled = false;
+          refreshBtn.textContent = '🔄 Refresh';
+        }
+      }
+    }
+
+    async function checkTrelloStatus(refreshBtn = null) {
+      const statusEl = document.getElementById('trelloStatus');
+      const connectBtn = document.getElementById('trelloConnectBtn');
+      const disconnectBtn = document.getElementById('trelloDisconnectBtn');
+      const infoEl = document.getElementById('trelloInfo');
+
+      try {
+        // Show loading state
+        if (refreshBtn) {
+          refreshBtn.disabled = true;
+          refreshBtn.innerHTML = '<span class="loading-spinner"></span> Refreshing...';
+        }
+
+        statusEl.className = 'status-badge status-loading';
+        statusEl.innerHTML = '<span class="loading-spinner"></span> Checking...';
+
+        const response = await fetch(`${API_BASE}/auth/trello/status?userId=${USER_ID}`);
+        const data = await response.json();
+
+        if (data.success && data.data.connected) {
+          statusEl.className = 'status-badge status-connected';
+          statusEl.textContent = '✓ Connected';
+          connectBtn.style.display = 'none';
+          disconnectBtn.style.display = 'block';
+          infoEl.classList.add('active');
+
+          if (refreshBtn) {
+            showSuccess('trello', 'Status refreshed successfully');
+          }
+        } else {
+          statusEl.className = 'status-badge status-disconnected';
+          statusEl.textContent = '✗ Not Connected';
+          connectBtn.style.display = 'block';
+          disconnectBtn.style.display = 'none';
+          infoEl.classList.remove('active');
+
+          if (refreshBtn) {
+            showSuccess('trello', 'Status refreshed - not connected');
+          }
+        }
+      } catch (error) {
+        statusEl.className = 'status-badge status-disconnected';
+        statusEl.textContent = '✗ Error';
+        showError('trello', 'Error checking status: ' + error.message);
+      } finally {
+        // Reset button state
+        if (refreshBtn) {
+          refreshBtn.disabled = false;
+          refreshBtn.textContent = '🔄 Refresh';
+        }
+      }
+    }
+
+    async function connectGmail() {
+      try {
+        const btn = document.getElementById('gmailConnectBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="loading-spinner"></span> Connecting...';
+
+        const response = await fetch(`${API_BASE}/auth/gmail/connect?userId=${USER_ID}`);
+        const data = await response.json();
+
+        if (data.success && data.data.authUrl) {
+          // Redirect to Google OAuth
+          window.location.href = data.data.authUrl;
+        } else {
+          showError('gmail', data.error || 'Failed to get auth URL');
+          btn.disabled = false;
+          btn.textContent = 'Connect Gmail';
+        }
+      } catch (error) {
+        showError('gmail', 'Error connecting: ' + error.message);
+        document.getElementById('gmailConnectBtn').disabled = false;
+        document.getElementById('gmailConnectBtn').textContent = 'Connect Gmail';
+      }
+    }
+
+    async function connectTrello() {
+      try {
+        const btn = document.getElementById('trelloConnectBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="loading-spinner"></span> Connecting...';
+
+        const response = await fetch(`${API_BASE}/auth/trello/connect?userId=${USER_ID}`);
+        const data = await response.json();
+
+        if (data.success && data.data.authUrl) {
+          // Redirect to Trello OAuth
+          window.location.href = data.data.authUrl;
+        } else {
+          showError('trello', data.error || 'Failed to get auth URL');
+          btn.disabled = false;
+          btn.textContent = 'Connect Trello';
+        }
+      } catch (error) {
+        showError('trello', 'Error connecting: ' + error.message);
+        document.getElementById('trelloConnectBtn').disabled = false;
+        document.getElementById('trelloConnectBtn').textContent = 'Connect Trello';
+      }
+    }
+
+    async function disconnectGmail() {
+      if (!confirm('Are you sure you want to disconnect Gmail?')) return;
+
+      try {
+        const response = await fetch(`${API_BASE}/auth/gmail/disconnect`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: USER_ID })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showSuccess('gmail', 'Gmail disconnected successfully');
+          checkGmailStatus();
+        } else {
+          showError('gmail', data.error || 'Failed to disconnect');
+        }
+      } catch (error) {
+        showError('gmail', 'Error disconnecting: ' + error.message);
+      }
+    }
+
+    async function disconnectTrello() {
+      if (!confirm('Are you sure you want to disconnect Trello?')) return;
+
+      try {
+        const response = await fetch(`${API_BASE}/auth/trello/disconnect`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: USER_ID })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showSuccess('trello', 'Trello disconnected successfully');
+          checkTrelloStatus();
+        } else {
+          showError('trello', data.error || 'Failed to disconnect');
+        }
+      } catch (error) {
+        showError('trello', 'Error disconnecting: ' + error.message);
+      }
+    }
+
+    function showError(service, message) {
+      const errorEl = document.getElementById(`${service}Error`);
+      errorEl.textContent = message;
+      errorEl.classList.add('active');
+      setTimeout(() => errorEl.classList.remove('active'), 5000);
+    }
+
+    function showSuccess(service, message) {
+      const successEl = document.getElementById(`${service}Success`);
+      successEl.textContent = message;
+      successEl.classList.add('active');
+      setTimeout(() => successEl.classList.remove('active'), 5000);
+    }
+  </script>
+</body>
+</html>

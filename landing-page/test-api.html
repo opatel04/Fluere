@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TaskSnap API Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #0A0A0A; color: #F4F4F5; }
+        .container { max-width: 800px; margin: 0 auto; }
+        textarea { width: 100%; height: 100px; margin: 10px 0; background: #1C1C1C; color: #F4F4F5; border: 1px solid #4ADE80; padding: 10px; }
+        button { background: #4ADE80; color: #0A0A0A; padding: 10px 20px; margin: 5px; border: none; cursor: pointer; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .result { background: #1C1C1C; padding: 15px; margin: 10px 0; border-left: 4px solid #4ADE80; }
+        .task { background: #272727; padding: 10px; margin: 5px 0; border-radius: 5px; }
+        .high { border-left: 4px solid #EF4444; }
+        .medium { border-left: 4px solid #F59E0B; }
+        .low { border-left: 4px solid #10B981; }
+        .status { padding: 10px; margin: 5px 0; border-radius: 5px; }
+        .success { background: rgba(16, 185, 129, 0.2); color: #6EE7B7; }
+        .error { background: rgba(239, 68, 68, 0.2); color: #FCA5A5; }
+        .info { background: rgba(59, 130, 246, 0.2); color: #93C5FD; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 TaskSnap API Integration Test</h1>
+        
+        <h2>Test AI Extraction</h2>
+        <textarea id="testInput" placeholder="Enter messy notes here...">Call mom tomorrow
+Urgent project meeting friday 3pm
+Buy groceries next week
+Fix bug in dashboard ASAP
+Schedule dentist appointment</textarea>
+        
+        <div>
+            <button onclick="testAIExtract()">🤖 Test AI Extract</button>
+            <button onclick="testShare()" id="shareBtn" disabled>📤 Test Share</button>
+            <button onclick="clearResults()">🗑️ Clear Results</button>
+        </div>
+        
+        <div id="status"></div>
+        <div id="results"></div>
+        
+        <h2>API Status</h2>
+        <button onclick="testHealth()">❤️ Check API Health</button>
+        <div id="healthStatus"></div>
+    </div>
+
+    <script>
+        const TASKSNAP_API_URL = 'https://tasksnap-api.ompatel1752004.workers.dev';
+        let currentTasks = [];
+
+        async function testHealth() {
+            const statusDiv = document.getElementById('healthStatus');
+            statusDiv.innerHTML = '<div class="status info">Checking API health...</div>';
+            
+            try {
+                const response = await fetch(`${TASKSNAP_API_URL}/health`);
+                const result = await response.json();
+                
+                statusDiv.innerHTML = `
+                    <div class="status success">
+                        <strong>✅ API Healthy!</strong><br>
+                        Status: ${result.status}<br>
+                        Version: ${result.version}<br>
+                        Environment: ${result.environment}<br>
+                        KV: ${result.services.kv}<br>
+                        OpenAI: ${result.services.openai}
+                    </div>
+                `;
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status error">❌ API Error: ${error.message}</div>`;
+            }
+        }
+
+        async function testAIExtract() {
+            const input = document.getElementById('testInput').value.trim();
+            const statusDiv = document.getElementById('status');
+            const resultsDiv = document.getElementById('results');
+            
+            if (!input) {
+                statusDiv.innerHTML = '<div class="status error">Please enter some text to test</div>';
+                return;
+            }
+            
+            statusDiv.innerHTML = '<div class="status info">🤖 Processing with AI...</div>';
+            
+            try {
+                const response = await fetch(`${TASKSNAP_API_URL}/api/ai-extract`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: input })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    currentTasks = result.data.tasks;
+                    
+                    const method = result.meta?.method || 'unknown';
+                    const fallback = result.fallback ? ' (fallback)' : '';
+                    
+                    statusDiv.innerHTML = `<div class="status success">✅ Success! Method: ${method}${fallback}, Processing: ${result.stats.processedMs}ms</div>`;
+                    
+                    resultsDiv.innerHTML = `
+                        <div class="result">
+                            <h3>📝 Summary</h3>
+                            <p>${result.data.summary}</p>
+                            
+                            <h3>📊 Stats</h3>
+                            <p>Total: ${result.stats.count}, High: ${result.stats.high}, Medium: ${result.stats.medium || result.stats.count - result.stats.high - (result.stats.low || 0)}, Low: ${result.stats.low || 0}, Dated: ${result.stats.dated}</p>
+                            
+                            <h3>✅ Tasks</h3>
+                            ${result.data.tasks.map(task => `
+                                <div class="task ${task.priority}">
+                                    <strong>${task.title}</strong><br>
+                                    Priority: ${task.priority} | Due: ${task.due || 'None'} | Tags: ${(task.tags || []).join(', ') || 'None'} | Confidence: ${Math.round((task.confidence || 0) * 100)}%
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                    
+                    document.getElementById('shareBtn').disabled = false;
+                } else {
+                    statusDiv.innerHTML = `<div class="status error">❌ API Error: ${result.message}</div>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status error">❌ Network Error: ${error.message}</div>`;
+            }
+        }
+
+        async function testShare() {
+            if (!currentTasks.length) {
+                document.getElementById('status').innerHTML = '<div class="status error">No tasks to share</div>';
+                return;
+            }
+            
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = '<div class="status info">📤 Creating share link...</div>';
+            
+            try {
+                const response = await fetch(`${TASKSNAP_API_URL}/api/new`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        summary: 'Test Task List',
+                        tasks: currentTasks
+                    })
+                });
+                
+                const result = await response.json();
+                const shareUrl = `${TASKSNAP_API_URL}${result.url}`;
+                
+                statusDiv.innerHTML = `
+                    <div class="status success">
+                        ✅ Share link created!<br>
+                        <a href="${shareUrl}" target="_blank" style="color: #4ADE80;">${shareUrl}</a><br>
+                        Expires: ${new Date(result.expiresAt).toLocaleDateString()}
+                    </div>
+                `;
+                
+                // Copy to clipboard
+                navigator.clipboard.writeText(shareUrl);
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status error">❌ Share Error: ${error.message}</div>`;
+            }
+        }
+
+        function clearResults() {
+            document.getElementById('status').innerHTML = '';
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('healthStatus').innerHTML = '';
+            document.getElementById('shareBtn').disabled = true;
+            currentTasks = [];
+        }
+
+        // Auto-test health on load
+        window.onload = () => testHealth();
+    </script>
+</body>
+</html>
+
+
