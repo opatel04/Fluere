@@ -268,6 +268,127 @@ class TrelloService {
   }
 
   /**
+   * Create a new list on a board
+   */
+  async createList(
+    userId: string,
+    boardId: string,
+    name: string,
+    pos?: 'top' | 'bottom' | number
+  ): Promise<TrelloList> {
+    try {
+      const client = await this.getClient(userId);
+
+      const params: any = {
+        name,
+        idBoard: boardId,
+      };
+
+      if (pos !== undefined) {
+        params.pos = pos;
+      }
+
+      const response = await client.post('/lists', null, { params });
+
+      logger.info(`Created list "${name}" on board ${boardId} for user ${userId}`);
+      return response.data;
+    } catch (error) {
+      logger.error('Error creating Trello list:', error);
+      throw new Error('Failed to create Trello list');
+    }
+  }
+
+  /**
+   * Update a list (rename, archive, reposition)
+   */
+  async updateList(
+    userId: string,
+    listId: string,
+    options: {
+      name?: string;
+      closed?: boolean;
+      pos?: 'top' | 'bottom' | number;
+    }
+  ): Promise<TrelloList> {
+    try {
+      const client = await this.getClient(userId);
+
+      const params: any = {};
+      if (options.name !== undefined) params.name = options.name;
+      if (options.closed !== undefined) params.closed = options.closed;
+      if (options.pos !== undefined) params.pos = options.pos;
+
+      const response = await client.put(`/lists/${listId}`, null, { params });
+
+      logger.info(`Updated list ${listId} for user ${userId}`);
+      return response.data;
+    } catch (error) {
+      logger.error('Error updating Trello list:', error);
+      throw new Error('Failed to update Trello list');
+    }
+  }
+
+  /**
+   * Find a list by name on a board, or create it if it doesn't exist
+   */
+  async findOrCreateList(
+    userId: string,
+    boardId: string,
+    listName: string,
+    position?: 'top' | 'bottom' | number
+  ): Promise<TrelloList> {
+    try {
+      // Get all lists on the board
+      const lists = await this.getLists(userId, boardId);
+
+      // Try to find existing list by name (case-insensitive)
+      const existingList = lists.find(
+        list => list.name.toLowerCase() === listName.toLowerCase()
+      );
+
+      if (existingList) {
+        logger.info(`Found existing list "${listName}" on board ${boardId}`);
+        return existingList;
+      }
+
+      // Create new list if not found
+      logger.info(`Creating new list "${listName}" on board ${boardId}`);
+      return await this.createList(userId, boardId, listName, position);
+    } catch (error) {
+      logger.error('Error finding or creating Trello list:', error);
+      throw new Error('Failed to find or create Trello list');
+    }
+  }
+
+  /**
+   * Move a card to a different list
+   */
+  async moveCard(
+    userId: string,
+    cardId: string,
+    targetListId: string,
+    position?: 'top' | 'bottom' | number
+  ): Promise<TrelloCard> {
+    try {
+      const options: UpdateCardOptions = {
+        idList: targetListId,
+      };
+
+      if (position !== undefined) {
+        options.pos = position;
+      }
+
+      const updatedCard = await this.updateCard(userId, cardId, options);
+
+      logger.info(`Moved card ${cardId} to list ${targetListId} for user ${userId}`);
+      return updatedCard;
+    } catch (error) {
+      logger.error('Error moving Trello card:', error);
+      throw new Error('Failed to move Trello card');
+    }
+  }
+
+  /**
    * Get cards from a list
    */
   async getCards(userId: string, listId: string): Promise<TrelloCard[]> {

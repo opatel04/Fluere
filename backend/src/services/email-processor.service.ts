@@ -1,6 +1,8 @@
 import gmailService from './gmail.service';
 import trelloService from './trello.service';
 import aiService from './ai.service';
+import taskIntelligenceService from './task-intelligence.service';
+import boardAutomationService from './board-automation.service';
 import logger from '../config/logger';
 import { ExtractedTask, ProcessingOptions } from '../types/ai.types';
 
@@ -63,11 +65,25 @@ class EmailProcessorService {
         `Extracted ${extraction.tasks.length} tasks with ${(extraction.confidence * 100).toFixed(1)}% confidence`
       );
 
-      // Step 3: Create Trello cards from tasks
+      // Step 3: Apply task intelligence (sorting, labeling, enrichment)
+      logger.info('Applying task intelligence: sorting, labeling, and enrichment...');
+      const enrichedTasks = extraction.tasks.map(task => taskIntelligenceService.enrichTask(task));
+      const sortedTasks = taskIntelligenceService.sortTasks(enrichedTasks);
+      const taskSummary = taskIntelligenceService.generateTaskSummary(sortedTasks);
+
+      logger.info('Task Intelligence Applied:', {
+        totalTasks: taskSummary.total,
+        urgent: taskSummary.urgent,
+        dueToday: taskSummary.dueToday,
+        byPriority: taskSummary.byPriority,
+        estimatedTime: `${taskSummary.estimatedTotalTime} minutes`,
+      });
+
+      // Step 4: Create Trello cards from intelligently sorted tasks
       const cardsCreated: string[] = [];
       const issues: string[] = [];
 
-      for (const task of extraction.tasks) {
+      for (const task of sortedTasks) {
         try {
           const card = await this.createTrelloCardFromTask(
             userId,
@@ -191,7 +207,7 @@ class EmailProcessorService {
     emailContext: any,
     listId?: string
   ): Promise<any> {
-    // If no list specified, get the first list from the first board
+    // If no list specified, determine board and list using automation rules
     let boardId: string;
     if (!listId) {
       const boards = await trelloService.getBoards(userId);
@@ -200,12 +216,40 @@ class EmailProcessorService {
       }
 
       boardId = boards[0].id;
-      const lists = await trelloService.getLists(userId, boardId);
-      if (lists.length === 0) {
-        throw new Error('No lists found in board');
+
+      // Initialize board with configured lists (creates missing lists)
+      try {
+        const initResult = await boardAutomationService.initializeBoard(userId, boardId);
+        if (initResult.listsCreated.length > 0) {
+          logger.info(`Initialized board ${boardId}: created ${initResult.listsCreated.length} lists`);
+        }
+      } catch (error) {
+        logger.warn('Failed to initialize board, continuing with existing lists:', error);
       }
 
-      listId = lists[0].id;
+      // Route task to appropriate list based on configured rules
+      try {
+        const routing = await boardAutomationService.routeTask(userId, boardId, task);
+
+        if (routing.listId) {
+          listId = routing.listId;
+          logger.info(`Routed task "${task.name}" to list "${routing.listName}" (rule: ${routing.matchedRule || 'default'})`);
+        } else {
+          // List doesn't exist, try to find or create it
+          const targetList = await trelloService.findOrCreateList(userId, boardId, routing.listName);
+          listId = targetList.id;
+          logger.info(`Created/found list "${routing.listName}" for task "${task.name}"`);
+        }
+      } catch (error) {
+        logger.warn('Failed to route task using automation rules, using default list:', error);
+
+        // Fallback to first list
+        const lists = await trelloService.getLists(userId, boardId);
+        if (lists.length === 0) {
+          throw new Error('No lists found in board');
+        }
+        listId = lists[0].id;
+      }
     } else {
       // Get board ID from list
       const list = await trelloService.getList(userId, listId);

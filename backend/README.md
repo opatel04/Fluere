@@ -71,10 +71,16 @@ redis-server
 Start the development server with hot reload:
 
 ```bash
+# Terminal 1: Start the API server
 npm run dev
+
+# Terminal 2: Start the background worker (for automated email processing)
+npm run dev:worker
 ```
 
 The server will start on `http://localhost:3000` (or your configured PORT).
+
+**For full automation**: You need to run both the API server and the worker process. See [AUTOMATION.md](./AUTOMATION.md) for detailed setup instructions.
 
 ## Building for Production
 
@@ -135,6 +141,12 @@ npm start
 - `POST /api/v1/config/rules` - Create routing rule
 - `GET /api/v1/config/boards` - Get board mappings
 - `POST /api/v1/config/boards` - Create board mapping
+
+### Queue Monitoring (NEW)
+- `GET /api/v1/queue/status` - Get overall queue status
+- `GET /api/v1/queue/jobs/user/:userId` - Get user's jobs
+- `GET /api/v1/queue/jobs/:jobId/details` - Get job details
+- `GET /api/v1/queue/stats/:userId` - Get user statistics
 
 ## Project Structure
 
@@ -243,9 +255,11 @@ OPENAI_MODEL=gpt-4o-mini
 
 ## Scripts
 
-- `npm run dev` - Start development server with hot reload
+- `npm run dev` - Start development API server with hot reload
+- `npm run dev:worker` - Start development background worker with hot reload
 - `npm run build` - Build TypeScript to JavaScript
-- `npm start` - Start production server
+- `npm start` - Start production API server
+- `npm run start:worker` - Start production background worker
 - `npm run lint` - Run ESLint
 - `npm run lint:fix` - Fix ESLint errors
 - `npm test` - Run tests (to be implemented)

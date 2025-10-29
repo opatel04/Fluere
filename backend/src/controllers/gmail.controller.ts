@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import gmailService from '../services/gmail.service';
 import logger from '../config/logger';
+import db from '../config/database';
 
 /**
  * Gmail Authentication Controller
@@ -316,23 +317,74 @@ export const handleWebhook = async (
 
     logger.info(`Received Gmail webhook for ${emailAddress}, historyId: ${historyId}`);
 
-    // TODO: Process new emails in background job
-    // This would typically:
-    // 1. Get user by email address
-    // 2. Fetch history since last historyId
-    // 3. Process new messages
-    // 4. Extract tasks and create Trello cards
+    // Get user by email address
+    const userResult = await db.query(
+      `SELECT u.id
+       FROM users u
+       JOIN gmail_tokens gt ON u.id = gt.user_id
+       WHERE gt.email = $1`,
+      [emailAddress]
+    );
 
-    // Acknowledge receipt immediately
-    res.status(200).json({
-      success: true,
-      data: {
-        message: 'Webhook received',
-      },
-    });
+    if (userResult.rows.length === 0) {
+      logger.warn(`No user found for email address: ${emailAddress}`);
+      res.status(200).json({
+        success: true,
+        data: { message: 'No user found for email address' },
+      });
+      return;
+    }
+
+    const userId = userResult.rows[0].id;
+
+    // Get history since last historyId to find new messages
+    const historyRecords = await gmailService.getHistory(userId, historyId);
+
+    // Collect all new messages from history records
+    const newMessageIds: string[] = [];
+    for (const record of historyRecords) {
+      if (record.messagesAdded && record.messagesAdded.length > 0) {
+        for (const messageData of record.messagesAdded) {
+          newMessageIds.push(messageData.message.id);
+        }
+      }
+    }
+
+    if (newMessageIds.length > 0) {
+      logger.info(`Found ${newMessageIds.length} new messages for user ${userId}`);
+
+      // Enqueue jobs for each new message
+      const { addEmailProcessingJob } = await import('../config/queue');
+
+      for (const messageId of newMessageIds) {
+        // Add job to queue with high priority for new emails
+        await addEmailProcessingJob({
+          userId,
+          messageId,
+          historyId,
+          priority: 3, // Higher priority for webhook-triggered emails
+        }, 3);
+
+        logger.info(`Enqueued email processing job for message ${messageId}`);
+      }
+
+      res.status(200).json({
+        success: true,
+        data: {
+          message: 'Webhook received and jobs enqueued',
+          messagesEnqueued: newMessageIds.length,
+        },
+      });
+    } else {
+      logger.info(`No new messages in webhook for user ${userId}`);
+      res.status(200).json({
+        success: true,
+        data: { message: 'No new messages to process' },
+      });
+    }
   } catch (error) {
     logger.error('Error in handleWebhook controller:', error);
-    // Still return 200 to acknowledge receipt
+    // Still return 200 to acknowledge receipt (Pub/Sub requirement)
     res.status(200).json({
       success: false,
       error: 'Webhook processing error',
