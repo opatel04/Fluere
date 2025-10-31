@@ -72,6 +72,25 @@ interface Config {
 
   // CORS
   allowedOrigins: string[];
+
+  // Email
+  email: {
+    host: string;
+    port: number;
+    user: string;
+    password: string;
+    from: string;
+    enabled: boolean;
+  };
+
+  // Resend (for inbound email)
+  resend: {
+    apiKey: string;
+    inboundDomain: string;
+  };
+
+  // App URL
+  appUrl: string;
 }
 
 const config: Config = {
@@ -133,6 +152,22 @@ const config: Config = {
   allowedOrigins: process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',')
     : ['http://localhost:3000', 'http://localhost:5173'],
+
+  email: {
+    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.EMAIL_PORT || '587', 10),
+    user: process.env.EMAIL_USER || '',
+    password: process.env.EMAIL_PASSWORD || '',
+    from: process.env.EMAIL_FROM || 'TaskSnap <noreply@tasksnap.com>',
+    enabled: process.env.EMAIL_ENABLED === 'true',
+  },
+
+  resend: {
+    apiKey: process.env.RESEND_API_KEY || '',
+    inboundDomain: process.env.RESEND_INBOUND_DOMAIN || 'tasksnap.com',
+  },
+
+  appUrl: process.env.APP_URL || 'http://localhost:3000',
 };
 
 // Validate required environment variables

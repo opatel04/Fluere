@@ -35,3 +35,10 @@ coverage/
 # Build output
 dist/
 build/
+
+# Media files
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm

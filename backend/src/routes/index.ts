@@ -11,6 +11,8 @@ import queueRoutes from './queue.routes';
 import automationRoutes from './automation.routes';
 import boardAutomationRoutes from './board-automation.routes';
 import simpleBoardRoutes from './simple-board.routes';
+import activityRoutes from './activity.routes';
+import clientRoutes from './client.routes';
 
 const router = Router();
 
@@ -27,5 +29,7 @@ router.use('/queue', queueRoutes); // Background job queue monitoring
 router.use('/automation', automationRoutes); // One-click automation
 router.use('/board-automation', boardAutomationRoutes); // Board automation and card routing
 router.use('/simple-board', simpleBoardRoutes); // Simple board setup (just create lists)
+router.use('/activity', activityRoutes); // Activity logs and audit trail
+router.use('/clients', clientRoutes); // Freelancer client management (NEW - Pivot Feature)
 
 export default router;

@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import config from '../config/env';
 import logger from '../config/logger';
 
@@ -163,6 +163,7 @@ export const flexibleAuth = async (
  * Generate JWT token for user
  */
 export const generateToken = (userId: string, expiresIn: string = '7d'): string => {
+  // @ts-ignore - Type mismatch in jsonwebtoken types
   return jwt.sign(
     { userId },
     config.security.jwtSecret,

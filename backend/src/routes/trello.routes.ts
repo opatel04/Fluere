@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { apiLimiter } from '../middleware/rateLimiter';
 import * as trelloController from '../controllers/trello.controller';
+import { verifyTrelloWebhook, webhookRateLimiter, webhookLogger } from '../middleware/webhookVerification';
 
 const router = Router();
 
@@ -26,8 +27,13 @@ router.post('/cards/:cardId/comments', apiLimiter, trelloController.addComment);
 // Search
 router.get('/search', trelloController.searchCards);
 
-// Webhook
-router.post('/webhook', trelloController.handleWebhook);
+// Webhook - with verification middleware
+router.post('/webhook',
+  webhookLogger('trello'),
+  webhookRateLimiter(100, 60000),
+  verifyTrelloWebhook,
+  trelloController.handleWebhook
+);
 
 // Sync endpoint (to be implemented with background jobs)
 router.post('/sync', apiLimiter, (req, res) => {

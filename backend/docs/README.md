@@ -5,11 +5,11 @@ This directory contains all documentation for the TaskSnap backend API.
 ## Contents
 
 - **API_DOCUMENTATION.md** - Comprehensive API guide with examples
-- **API_REFERENCE.md** - Quick reference for all endpoints
 - **ARCHITECTURE.md** - System architecture and design decisions
 - **FEATURES.md** - Feature roadmap and planned enhancements
-- **STRUCTURE.md** - Project structure and file organization
-- **PUBLIC_FILES.md** - Documentation for frontend HTML files
+- **PROGRESS_SUMMARY.md** - Freelancer pivot implementation progress
+- **PHASE_1_COMPLETE.md** - Phase 1 completion milestone
+- **TESTING_GUIDE.md** - Testing guide for the backend
 
 ## Quick Links
 
