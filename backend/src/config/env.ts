@@ -189,8 +189,10 @@ const validateConfig = (): void => {
   }
 };
 
-// Validate on import
-if (config.nodeEnv !== 'test') {
+// Validate on import (skip during build phase)
+// During Railway build, DATABASE_URL won't be available yet
+const isBuilding = !process.env.DATABASE_URL && process.env.RAILWAY_ENVIRONMENT;
+if (config.nodeEnv !== 'test' && !isBuilding) {
   validateConfig();
 }
 
