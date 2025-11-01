@@ -3,16 +3,24 @@ import config from './env';
 import logger from './logger';
 
 // PostgreSQL connection configuration
-const poolConfig: PoolConfig = {
-  host: config.database.host,
-  port: config.database.port,
-  database: config.database.name,
-  user: config.database.user,
-  password: config.database.password,
-  max: 20, // Maximum number of clients in the pool
-  idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-  connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
-};
+// Use DATABASE_URL if available (Railway, Heroku, etc.), otherwise use individual params
+const poolConfig: PoolConfig = config.database.url
+  ? {
+      connectionString: config.database.url,
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 2000,
+    }
+  : {
+      host: config.database.host,
+      port: config.database.port,
+      database: config.database.name,
+      user: config.database.user,
+      password: config.database.password,
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 2000,
+    };
 
 // Create connection pool
 const pool = new Pool(poolConfig);
