@@ -365,13 +365,31 @@ class ClientService {
    */
   async getClientStats(clientId: string): Promise<ClientStats> {
     try {
-      // Use the database function we created
+      // Get basic stats directly without relying on database function
       const statsResult = await query(
-        `SELECT * FROM get_client_stats($1)`,
+        `SELECT
+          COUNT(DISTINCT t.id)::INTEGER as total_tasks,
+          COUNT(DISTINCT CASE WHEN t.status = 'completed' THEN t.id END)::INTEGER as completed_tasks,
+          COUNT(DISTINCT CASE WHEN t.is_overdue = true THEN t.id END)::INTEGER as overdue_tasks,
+          COUNT(DISTINCT CASE WHEN t.status = 'pending' THEN t.id END)::INTEGER as pending_tasks,
+          COUNT(DISTINCT e.id)::INTEGER as total_emails,
+          AVG(e.sentiment_score) as avg_sentiment
+        FROM clients c
+        LEFT JOIN tasks t ON t.client_id = c.id
+        LEFT JOIN emails e ON e.client_id = c.id
+        WHERE c.id = $1
+        GROUP BY c.id`,
         [clientId]
       );
 
-      const dbStats = statsResult.rows[0];
+      const dbStats = statsResult.rows[0] || {
+        total_tasks: 0,
+        completed_tasks: 0,
+        overdue_tasks: 0,
+        pending_tasks: 0,
+        total_emails: 0,
+        avg_sentiment: null
+      };
 
       // Get upcoming deadlines
       const deadlinesResult = await query(
