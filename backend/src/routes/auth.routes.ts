@@ -4,6 +4,8 @@ import * as gmailController from '../controllers/gmail.controller';
 import * as trelloController from '../controllers/trello.controller';
 import { generateToken } from '../middleware/auth.middleware';
 import { v4 as uuidv4 } from 'uuid';
+import db from '../config/database';
+import logger from '../config/logger';
 
 const router = Router();
 
@@ -38,6 +40,39 @@ router.post('/test-token', (req, res) => {
       }
     });
   } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Initialize temp user (for development/testing)
+router.post('/init-temp-user', async (req, res) => {
+  try {
+    const email = req.body.email || 'temp@example.com';
+    const userId = 'temp_user_id';
+
+    // Create temp user if doesn't exist
+    await db.query(
+      `INSERT INTO users (id, email, created_at, updated_at)
+       VALUES ($1, $2, NOW(), NOW())
+       ON CONFLICT (id) DO UPDATE SET email = $2, updated_at = NOW()`,
+      [userId, email]
+    );
+
+    logger.info(`Initialized temp user: ${userId} with email: ${email}`);
+
+    res.json({
+      success: true,
+      data: {
+        userId,
+        email,
+        message: 'Temp user initialized successfully. You can now connect OAuth accounts.'
+      }
+    });
+  } catch (error: any) {
+    logger.error('Error initializing temp user:', error);
     res.status(500).json({
       success: false,
       error: error.message
