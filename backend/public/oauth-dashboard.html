@@ -326,10 +326,20 @@
   <script>
     // Use relative path to work in both local and production
     const API_BASE = `${window.location.origin}/api/v1`;
-    const USER_ID = 'temp_user_id'; // In production, get from session/auth
+
+    // Get userId from URL parameter, localStorage, or use default
+    const urlParams = new URLSearchParams(window.location.search);
+    let USER_ID = urlParams.get('userId') || localStorage.getItem('tasksnap_user_id') || 'temp_user_id';
+
+    // Save userId to localStorage for future use
+    if (urlParams.get('userId')) {
+      localStorage.setItem('tasksnap_user_id', USER_ID);
+    }
 
     // Check connection status on page load
     window.addEventListener('load', () => {
+      // Update userId display
+      document.getElementById('userId').textContent = USER_ID;
       handleOAuthCallback();
       checkGmailStatus();
       checkTrelloStatus();
@@ -337,16 +347,16 @@
 
     // Handle OAuth callback (if returning from provider)
     async function handleOAuthCallback() {
-      const urlParams = new URLSearchParams(window.location.search);
+      const callbackUrlParams = new URLSearchParams(window.location.search);
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
 
       // Check for Gmail callback
-      const gmailStatus = urlParams.get('gmail');
+      const gmailStatus = callbackUrlParams.get('gmail');
       if (gmailStatus === 'success') {
         showSuccess('gmail', 'Gmail connected successfully!');
         checkGmailStatus();
       } else if (gmailStatus === 'error') {
-        const message = urlParams.get('message') || 'Failed to connect Gmail';
+        const message = callbackUrlParams.get('message') || 'Failed to connect Gmail';
         showError('gmail', decodeURIComponent(message));
       }
 
@@ -381,12 +391,12 @@
       }
 
       // Check for Trello callback in query params (for error cases)
-      const trelloStatus = urlParams.get('trello');
+      const trelloStatus = callbackUrlParams.get('trello');
       if (trelloStatus === 'success') {
         showSuccess('trello', 'Trello connected successfully!');
         checkTrelloStatus();
       } else if (trelloStatus === 'error') {
-        const message = urlParams.get('message') || 'Failed to connect Trello';
+        const message = callbackUrlParams.get('message') || 'Failed to connect Trello';
         showError('trello', decodeURIComponent(message));
       }
 

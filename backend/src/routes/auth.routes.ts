@@ -51,13 +51,14 @@ router.post('/test-token', (req, res) => {
 router.post('/init-temp-user', async (req, res) => {
   try {
     const email = req.body.email || 'temp@example.com';
-    const userId = 'temp_user_id';
+    const userId = req.body.userId || uuidv4(); // Generate a real UUID
 
     // Create temp user if doesn't exist
-    await db.query(
+    const result = await db.query(
       `INSERT INTO users (id, email, created_at, updated_at)
        VALUES ($1, $2, NOW(), NOW())
-       ON CONFLICT (id) DO UPDATE SET email = $2, updated_at = NOW()`,
+       ON CONFLICT (id) DO UPDATE SET email = $2, updated_at = NOW()
+       RETURNING id, email`,
       [userId, email]
     );
 
@@ -66,9 +67,10 @@ router.post('/init-temp-user', async (req, res) => {
     res.json({
       success: true,
       data: {
-        userId,
-        email,
-        message: 'Temp user initialized successfully. You can now connect OAuth accounts.'
+        userId: result.rows[0].id,
+        email: result.rows[0].email,
+        message: 'User initialized successfully. Use this userId to connect OAuth accounts.',
+        note: 'Save this userId - you will need it for OAuth connections!'
       }
     });
   } catch (error: any) {
