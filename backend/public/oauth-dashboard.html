@@ -352,9 +352,10 @@
 
       // Check for Trello callback in URL fragment
       const trelloToken = hashParams.get('token');
-      const trelloState = hashParams.get('state');
+      // Trello doesn't return state in fragment, so use default USER_ID
+      const trelloState = hashParams.get('state') || USER_ID;
 
-      if (trelloToken && trelloState) {
+      if (trelloToken) {
         // Show loading state
         const statusEl = document.getElementById('trelloStatus');
         statusEl.className = 'status-badge status-loading';
