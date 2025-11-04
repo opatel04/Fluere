@@ -336,8 +336,9 @@
     });
 
     // Handle OAuth callback (if returning from provider)
-    function handleOAuthCallback() {
+    async function handleOAuthCallback() {
       const urlParams = new URLSearchParams(window.location.search);
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
 
       // Check for Gmail callback
       const gmailStatus = urlParams.get('gmail');
@@ -349,7 +350,36 @@
         showError('gmail', decodeURIComponent(message));
       }
 
-      // Check for Trello callback
+      // Check for Trello callback in URL fragment
+      const trelloToken = hashParams.get('token');
+      const trelloState = hashParams.get('state');
+
+      if (trelloToken && trelloState) {
+        // Show loading state
+        const statusEl = document.getElementById('trelloStatus');
+        statusEl.className = 'status-badge status-loading';
+        statusEl.innerHTML = '<span class="loading-spinner"></span> Connecting...';
+
+        try {
+          // Send token to backend
+          const response = await fetch(`${API_BASE}/auth/trello/callback?token=${trelloToken}&state=${trelloState}`);
+          const data = await response.json();
+
+          if (data.success) {
+            showSuccess('trello', 'Trello connected successfully!');
+            checkTrelloStatus();
+          } else {
+            showError('trello', data.error || 'Failed to connect Trello');
+          }
+        } catch (error) {
+          showError('trello', 'Error connecting to Trello: ' + error.message);
+        }
+
+        // Clean URL hash
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+
+      // Check for Trello callback in query params (for error cases)
       const trelloStatus = urlParams.get('trello');
       if (trelloStatus === 'success') {
         showSuccess('trello', 'Trello connected successfully!');
