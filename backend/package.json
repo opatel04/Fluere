@@ -14,7 +14,8 @@
     "start:worker": "node dist/workers/index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "eslint src/**/*.ts",
-    "lint:fix": "eslint src/**/*.ts --fix"
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "migrate:gmail": "ts-node scripts/migrate-gmail-tokens.ts"
   },
   "keywords": [
     "trello",
