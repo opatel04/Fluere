@@ -1,7 +1,8 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response } from 'express';
 import gmailService from '../services/gmail.service';
-import logger from '../config/logger';
 import db from '../config/database';
+import { asyncHandler } from '../middleware/errorHandler';
+import { ValidationError } from '../types/errors';
 
 /**
  * Gmail Authentication Controller
@@ -12,310 +13,237 @@ import db from '../config/database';
  * Initiate Gmail OAuth flow
  * GET /api/v1/auth/gmail/connect
  */
-export const connectGmail = async (
+export const connectGmail = asyncHandler(async (
   req: Request,
-  res: Response,
-  next: NextFunction
+  res: Response
 ): Promise<void> => {
-  try {
-    // In production, get userId from authenticated session
-    // For now, we'll use a query parameter or generate a temp ID
-    const userId = req.query.userId as string || (req as any).session?.userId || 'temp_user_id';
+  // In production, get userId from authenticated session
+  // For now, we'll use a query parameter or generate a temp ID
+  const userId = req.query.userId as string || (req as any).session?.userId || 'temp_user_id';
 
-    if (!userId) {
-      res.status(400).json({
-        success: false,
-        error: 'User ID is required',
-      });
-      return;
-    }
-
-    const authUrl = gmailService.getAuthUrl(userId);
-
-    res.json({
-      success: true,
-      data: {
-        authUrl,
-        message: 'Please visit the URL to authorize Gmail access',
-      },
-    });
-  } catch (error) {
-    logger.error('Error in connectGmail controller:', error);
-    next(error);
+  if (!userId) {
+    throw new ValidationError('User ID is required');
   }
-};
+
+  const authUrl = gmailService.getAuthUrl(userId);
+
+  res.json({
+    success: true,
+    data: {
+      authUrl,
+      message: 'Please visit the URL to authorize Gmail access',
+    },
+  });
+});
 
 /**
  * Handle Gmail OAuth callback
  * GET /api/v1/auth/gmail/callback
+ *
+ * Note: Uses redirects instead of JSON responses for OAuth flow
  */
-export const gmailCallback = async (
+export const gmailCallback = asyncHandler(async (
   req: Request,
   res: Response
 ): Promise<void> => {
-  try {
-    const { code, state, error } = req.query;
+  const { code, state, error } = req.query;
 
-    // Handle OAuth errors
-    if (error) {
-      res.redirect(`/oauth-dashboard.html?gmail=error&message=${encodeURIComponent(`OAuth error: ${error}`)}`);
-      return;
-    }
-
-    if (!code || typeof code !== 'string') {
-      res.redirect('/oauth-dashboard.html?gmail=error&message=Authorization%20code%20missing');
-      return;
-    }
-
-    // State contains the user ID
-    const userId = state as string;
-
-    if (!userId) {
-      res.redirect('/oauth-dashboard.html?gmail=error&message=Invalid%20state%20parameter');
-      return;
-    }
-
-    // Exchange code for tokens
-    const tokens = await gmailService.getTokensFromCode(code);
-
-    // Save tokens to database
-    await gmailService.saveTokens(userId, tokens);
-
-    logger.info(`Gmail connected successfully for user ${userId}`);
-
-    // Redirect back to OAuth dashboard with success
-    res.redirect('/oauth-dashboard.html?gmail=success');
-  } catch (error) {
-    logger.error('Error in gmailCallback controller:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    res.redirect(`/oauth-dashboard.html?gmail=error&message=${encodeURIComponent(errorMessage)}`);
+  // Handle OAuth errors
+  if (error) {
+    res.redirect(`/oauth-dashboard.html?gmail=error&message=${encodeURIComponent(`OAuth error: ${error}`)}`);
+    return;
   }
-};
+
+  if (!code || typeof code !== 'string') {
+    res.redirect('/oauth-dashboard.html?gmail=error&message=Authorization%20code%20missing');
+    return;
+  }
+
+  // State contains the user ID
+  const userId = state as string;
+
+  if (!userId) {
+    res.redirect('/oauth-dashboard.html?gmail=error&message=Invalid%20state%20parameter');
+    return;
+  }
+
+  // Exchange code for tokens and save to database
+  // Note: If this fails, asyncHandler will catch and the error handler will respond with JSON
+  // In a production OAuth flow, you might want a custom error handler that redirects
+  const tokens = await gmailService.getTokensFromCode(code);
+  await gmailService.saveTokens(userId, tokens);
+
+  // Redirect back to OAuth dashboard with success
+  res.redirect('/oauth-dashboard.html?gmail=success');
+});
 
 /**
  * Disconnect Gmail account
  * POST /api/v1/auth/gmail/disconnect
  */
-export const disconnectGmail = async (
+export const disconnectGmail = asyncHandler(async (
   req: Request,
-  res: Response,
-  next: NextFunction
+  res: Response
 ): Promise<void> => {
-  try {
-    const userId = req.body.userId || (req as any).session?.userId;
+  const userId = req.body.userId || (req as any).session?.userId;
 
-    if (!userId) {
-      res.status(400).json({
-        success: false,
-        error: 'User ID is required',
-      });
-      return;
-    }
-
-    await gmailService.disconnect(userId);
-
-    res.json({
-      success: true,
-      data: {
-        message: 'Gmail disconnected successfully',
-      },
-    });
-  } catch (error) {
-    logger.error('Error in disconnectGmail controller:', error);
-    next(error);
+  if (!userId) {
+    throw new ValidationError('User ID is required');
   }
-};
+
+  await gmailService.disconnect(userId);
+
+  res.json({
+    success: true,
+    data: {
+      message: 'Gmail disconnected successfully',
+    },
+  });
+});
 
 /**
  * Get Gmail connection status
  * GET /api/v1/auth/gmail/status
  */
-export const getGmailStatus = async (
+export const getGmailStatus = asyncHandler(async (
   req: Request,
-  res: Response,
-  next: NextFunction
+  res: Response
 ): Promise<void> => {
-  try {
-    const userId = req.query.userId as string || (req as any).session?.userId;
+  const userId = req.query.userId as string || (req as any).session?.userId;
 
-    if (!userId) {
-      res.status(400).json({
-        success: false,
-        error: 'User ID is required',
-      });
-      return;
-    }
-
-    const isConnected = await gmailService.isConnected(userId);
-
-    res.json({
-      success: true,
-      data: {
-        connected: isConnected,
-        service: 'gmail',
-      },
-    });
-  } catch (error) {
-    logger.error('Error in getGmailStatus controller:', error);
-    next(error);
+  if (!userId) {
+    throw new ValidationError('User ID is required');
   }
-};
+
+  const isConnected = await gmailService.isConnected(userId);
+
+  res.json({
+    success: true,
+    data: {
+      connected: isConnected,
+      service: 'gmail',
+    },
+  });
+});
 
 /**
  * Fetch emails from Gmail
  * GET /api/v1/emails/fetch
  */
-export const fetchEmails = async (
+export const fetchEmails = asyncHandler(async (
   req: Request,
-  res: Response,
-  next: NextFunction
+  res: Response
 ): Promise<void> => {
-  try {
-    const userId = req.query.userId as string || (req as any).session?.userId;
+  const userId = req.query.userId as string || (req as any).session?.userId;
 
-    if (!userId) {
-      res.status(400).json({
-        success: false,
-        error: 'User ID is required',
-      });
-      return;
-    }
-
-    const maxResults = parseInt(req.query.maxResults as string) || 10;
-    const query = req.query.query as string;
-    const labelIds = req.query.labelIds
-      ? (req.query.labelIds as string).split(',')
-      : undefined;
-    const pageToken = req.query.pageToken as string;
-
-    const result = await gmailService.fetchEmails(userId, {
-      maxResults,
-      query,
-      labelIds,
-      pageToken,
-    });
-
-    // Parse emails
-    const parsedEmails = result.messages.map((msg) =>
-      gmailService.parseEmail(msg)
-    );
-
-    res.json({
-      success: true,
-      data: {
-        emails: parsedEmails,
-        nextPageToken: result.nextPageToken,
-        count: parsedEmails.length,
-      },
-    });
-  } catch (error) {
-    logger.error('Error in fetchEmails controller:', error);
-    next(error);
+  if (!userId) {
+    throw new ValidationError('User ID is required');
   }
-};
+
+  const maxResults = parseInt(req.query.maxResults as string) || 10;
+  const query = req.query.query as string;
+  const labelIds = req.query.labelIds
+    ? (req.query.labelIds as string).split(',')
+    : undefined;
+  const pageToken = req.query.pageToken as string;
+
+  const result = await gmailService.fetchEmails(userId, {
+    maxResults,
+    query,
+    labelIds,
+    pageToken,
+  });
+
+  // Parse emails
+  const parsedEmails = result.messages.map((msg) =>
+    gmailService.parseEmail(msg)
+  );
+
+  res.json({
+    success: true,
+    data: {
+      emails: parsedEmails,
+      nextPageToken: result.nextPageToken,
+      count: parsedEmails.length,
+    },
+  });
+});
 
 /**
  * Subscribe to Gmail push notifications
  * POST /api/v1/emails/subscribe
  */
-export const subscribeToNotifications = async (
+export const subscribeToNotifications = asyncHandler(async (
   req: Request,
-  res: Response,
-  next: NextFunction
+  res: Response
 ): Promise<void> => {
-  try {
-    const userId = req.body.userId || (req as any).session?.userId;
-    const topicName = req.body.topicName;
+  const userId = req.body.userId || (req as any).session?.userId;
+  const topicName = req.body.topicName;
 
-    if (!userId) {
-      res.status(400).json({
-        success: false,
-        error: 'User ID is required',
-      });
-      return;
-    }
-
-    if (!topicName) {
-      res.status(400).json({
-        success: false,
-        error: 'Pub/Sub topic name is required',
-      });
-      return;
-    }
-
-    await gmailService.subscribeToNotifications(userId, topicName);
-
-    res.json({
-      success: true,
-      data: {
-        message: 'Subscribed to Gmail notifications successfully',
-      },
-    });
-  } catch (error) {
-    logger.error('Error in subscribeToNotifications controller:', error);
-    next(error);
+  if (!userId) {
+    throw new ValidationError('User ID is required');
   }
-};
+
+  if (!topicName) {
+    throw new ValidationError('Pub/Sub topic name is required');
+  }
+
+  await gmailService.subscribeToNotifications(userId, topicName);
+
+  res.json({
+    success: true,
+    data: {
+      message: 'Subscribed to Gmail notifications successfully',
+    },
+  });
+});
 
 /**
  * Unsubscribe from Gmail push notifications
  * POST /api/v1/emails/unsubscribe
  */
-export const unsubscribeFromNotifications = async (
+export const unsubscribeFromNotifications = asyncHandler(async (
   req: Request,
-  res: Response,
-  next: NextFunction
+  res: Response
 ): Promise<void> => {
-  try {
-    const userId = req.body.userId || (req as any).session?.userId;
+  const userId = req.body.userId || (req as any).session?.userId;
 
-    if (!userId) {
-      res.status(400).json({
-        success: false,
-        error: 'User ID is required',
-      });
-      return;
-    }
-
-    await gmailService.unsubscribeFromNotifications(userId);
-
-    res.json({
-      success: true,
-      data: {
-        message: 'Unsubscribed from Gmail notifications successfully',
-      },
-    });
-  } catch (error) {
-    logger.error('Error in unsubscribeFromNotifications controller:', error);
-    next(error);
+  if (!userId) {
+    throw new ValidationError('User ID is required');
   }
-};
+
+  await gmailService.unsubscribeFromNotifications(userId);
+
+  res.json({
+    success: true,
+    data: {
+      message: 'Unsubscribed from Gmail notifications successfully',
+    },
+  });
+});
 
 /**
  * Handle Gmail webhook notifications
  * POST /api/v1/emails/webhook
+ *
+ * Note: Always returns 200 to acknowledge Pub/Sub receipt
  */
-export const handleWebhook = async (
+export const handleWebhook = asyncHandler(async (
   req: Request,
   res: Response
 ): Promise<void> => {
+  // Wrap in try-catch to ensure we always return 200 for Pub/Sub acknowledgment
   try {
     // Gmail sends push notifications as Pub/Sub messages
     const message = req.body.message;
 
     if (!message || !message.data) {
-      res.status(400).json({
-        success: false,
-        error: 'Invalid webhook payload',
-      });
-      return;
+      throw new ValidationError('Invalid webhook payload');
     }
 
     // Decode the Pub/Sub message
     const data = JSON.parse(Buffer.from(message.data, 'base64').toString());
     const { emailAddress, historyId } = data;
-
-    logger.info(`Received Gmail webhook for ${emailAddress}, historyId: ${historyId}`);
 
     // Get user by email address
     const userResult = await db.query(
@@ -327,7 +255,6 @@ export const handleWebhook = async (
     );
 
     if (userResult.rows.length === 0) {
-      logger.warn(`No user found for email address: ${emailAddress}`);
       res.status(200).json({
         success: true,
         data: { message: 'No user found for email address' },
@@ -351,21 +278,16 @@ export const handleWebhook = async (
     }
 
     if (newMessageIds.length > 0) {
-      logger.info(`Found ${newMessageIds.length} new messages for user ${userId}`);
-
       // Enqueue jobs for each new message
       const { addEmailProcessingJob } = await import('../config/queue');
 
       for (const messageId of newMessageIds) {
-        // Add job to queue with high priority for new emails
         await addEmailProcessingJob({
           userId,
           messageId,
           historyId,
           priority: 3, // Higher priority for webhook-triggered emails
         }, 3);
-
-        logger.info(`Enqueued email processing job for message ${messageId}`);
       }
 
       res.status(200).json({
@@ -376,21 +298,19 @@ export const handleWebhook = async (
         },
       });
     } else {
-      logger.info(`No new messages in webhook for user ${userId}`);
       res.status(200).json({
         success: true,
         data: { message: 'No new messages to process' },
       });
     }
   } catch (error) {
-    logger.error('Error in handleWebhook controller:', error);
-    // Still return 200 to acknowledge receipt (Pub/Sub requirement)
+    // Always return 200 to acknowledge receipt (Pub/Sub requirement)
     res.status(200).json({
       success: false,
-      error: 'Webhook processing error',
+      error: error instanceof Error ? error.message : 'Webhook processing error',
     });
   }
-};
+});
 
 /**
  * Mark email as read
@@ -402,8 +322,7 @@ export const handleWebhook = async (
  */
 export const markAsRead = async (
   _req: Request,
-  res: Response,
-  _next: NextFunction
+  res: Response
 ): Promise<void> => {
   res.status(403).json({
     success: false,
