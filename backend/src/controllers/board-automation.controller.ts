@@ -1,10 +1,11 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response } from 'express';
 import boardAutomationService, {
   ListConfig,
   RoutingRule,
 } from '../services/board-automation.service';
 import trelloService from '../services/trello.service';
-import logger from '../config/logger';
+import { asyncHandler } from '../middleware/errorHandler';
+import { ValidationError, NotFoundError, ForbiddenError } from '../types/errors';
 
 /**
  * Board Automation Controller
@@ -15,69 +16,47 @@ import logger from '../config/logger';
  * Get board configuration
  * GET /api/v1/board-automation/:boardId
  */
-export const getBoardConfig = async (
+export const getBoardConfig = asyncHandler(async (
   req: Request,
-  res: Response,
-  next: NextFunction
+  res: Response
 ): Promise<void> => {
-  try {
-    const { boardId } = req.params;
-    const { userId } = req.body;
+  // userId is guaranteed by extractUserId middleware
+  const userId = (req as any).userId;
+  const { boardId } = req.params;
 
-    if (!userId) {
-      res.status(400).json({
-        success: false,
-        error: 'userId is required',
-      });
-      return;
-    }
+  const config = await boardAutomationService.getBoardConfig(userId, boardId);
 
-    const config = await boardAutomationService.getBoardConfig(userId, boardId);
-
-    if (!config) {
-      res.status(404).json({
-        success: false,
-        error: 'Board configuration not found',
-      });
-      return;
-    }
-
-    res.json({
-      success: true,
-      data: config,
-    });
-  } catch (error: any) {
-    logger.error('Error in getBoardConfig controller:', error);
-    next(error);
+  if (!config) {
+    throw new NotFoundError('Board configuration');
   }
-};
+
+  res.json({
+    success: true,
+    data: config,
+  });
+});
 
 /**
- * Get all board configurations for a user
- * GET /api/v1/board-automation/user/:userId
+ * Get all board configurations for authenticated user
+ * GET /api/v1/board-automation/configs
  */
-export const getUserBoardConfigs = async (
+export const getUserBoardConfigs = asyncHandler(async (
   req: Request,
-  res: Response,
-  next: NextFunction
+  res: Response
 ): Promise<void> => {
-  try {
-    const { userId } = req.params;
+  // userId is guaranteed by extractUserId middleware
+  const userId = (req as any).userId;
 
-    const configs = await boardAutomationService.getUserBoardConfigs(userId);
+  const configs = await boardAutomationService.getUserBoardConfigs(userId);
 
-    res.json({
-      success: true,
-      data: {
-        configs,
-        count: configs.length,
-      },
-    });
-  } catch (error: any) {
-    logger.error('Error in getUserBoardConfigs controller:', error);
-    next(error);
-  }
-};
+  res.json({
+    success: true,
+    data: {
+      configs,
+      count: configs.length,
+    },
+  });
+});
 
 /**
  * Create or update board configuration
@@ -102,71 +81,47 @@ export const getUserBoardConfigs = async (
  *   ]
  * }
  */
-export const saveBoardConfig = async (
+export const saveBoardConfig = asyncHandler(async (
   req: Request,
-  res: Response,
-  next: NextFunction
+  res: Response
 ): Promise<void> => {
-  try {
-    const { boardId } = req.params;
-    const { userId, lists, routingRules } = req.body;
+  const { boardId } = req.params;
+  const { userId, lists, routingRules } = req.body;
 
-    if (!userId || !lists || !routingRules) {
-      res.status(400).json({
-        success: false,
-        error: 'userId, lists, and routingRules are required',
-      });
-      return;
-    }
-
-    // Validate lists
-    if (!Array.isArray(lists) || lists.length === 0) {
-      res.status(400).json({
-        success: false,
-        error: 'lists must be a non-empty array',
-      });
-      return;
-    }
-
-    // Validate routing rules
-    if (!Array.isArray(routingRules)) {
-      res.status(400).json({
-        success: false,
-        error: 'routingRules must be an array',
-      });
-      return;
-    }
-
-    // Verify user has access to the board
-    try {
-      await trelloService.getBoard(userId, boardId);
-    } catch (error) {
-      res.status(403).json({
-        success: false,
-        error: 'You do not have access to this board',
-      });
-      return;
-    }
-
-    const config = await boardAutomationService.saveBoardConfig(
-      userId,
-      boardId,
-      lists as ListConfig[],
-      routingRules as RoutingRule[]
-    );
-
-    logger.info(`Saved board config for user ${userId}, board ${boardId}`);
-
-    res.json({
-      success: true,
-      data: config,
-      message: 'Board configuration saved successfully',
-    });
-  } catch (error: any) {
-    logger.error('Error in saveBoardConfig controller:', error);
-    next(error);
+  if (!userId || !lists || !routingRules) {
+    throw new ValidationError('userId, lists, and routingRules are required');
   }
-};
+
+  // Validate lists
+  if (!Array.isArray(lists) || lists.length === 0) {
+    throw new ValidationError('lists must be a non-empty array');
+  }
+
+  // Validate routing rules
+  if (!Array.isArray(routingRules)) {
+    throw new ValidationError('routingRules must be an array');
+  }
+
+  // Verify user has access to the board
+  try {
+    await trelloService.getBoard(userId, boardId);
+  } catch (error) {
+    throw new ForbiddenError('You do not have access to this board');
+  }
+
+  const config = await boardAutomationService.saveBoardConfig(
+    userId,
+    boardId,
+    lists as ListConfig[],
+    routingRules as RoutingRule[]
+  );
+
+  res.json({
+    success: true,
+    data: config,
+    message: 'Board configuration saved successfully',
+  });
+});
 
 /**
  * Initialize board with configured lists
@@ -174,72 +129,42 @@ export const saveBoardConfig = async (
  *
  * Creates all configured lists that don't exist yet
  */
-export const initializeBoard = async (
+export const initializeBoard = asyncHandler(async (
   req: Request,
-  res: Response,
-  next: NextFunction
+  res: Response
 ): Promise<void> => {
-  try {
-    const { boardId } = req.params;
-    const { userId } = req.body;
+  const { boardId } = req.params;
+  // userId is guaranteed by extractUserId middleware
+  const userId = (req as any).userId;
 
-    if (!userId) {
-      res.status(400).json({
-        success: false,
-        error: 'userId is required',
-      });
-      return;
-    }
+  const result = await boardAutomationService.initializeBoard(userId, boardId);
 
-    const result = await boardAutomationService.initializeBoard(userId, boardId);
-
-    logger.info(`Initialized board ${boardId} for user ${userId}`, result);
-
-    res.json({
-      success: true,
-      data: result,
-      message: `Created ${result.listsCreated.length} new lists, ${result.listsExisting.length} lists already existed`,
-    });
-  } catch (error: any) {
-    logger.error('Error in initializeBoard controller:', error);
-    next(error);
-  }
-};
+  res.json({
+    success: true,
+    data: result,
+    message: `Created ${result.listsCreated.length} new lists, ${result.listsExisting.length} lists already existed`,
+  });
+});
 
 /**
  * Delete board configuration
  * DELETE /api/v1/board-automation/:boardId
  */
-export const deleteBoardConfig = async (
+export const deleteBoardConfig = asyncHandler(async (
   req: Request,
-  res: Response,
-  next: NextFunction
+  res: Response
 ): Promise<void> => {
-  try {
-    const { boardId } = req.params;
-    const { userId } = req.body;
+  const { boardId } = req.params;
+  // userId is guaranteed by extractUserId middleware
+  const userId = (req as any).userId;
 
-    if (!userId) {
-      res.status(400).json({
-        success: false,
-        error: 'userId is required',
-      });
-      return;
-    }
+  await boardAutomationService.deleteBoardConfig(userId, boardId);
 
-    await boardAutomationService.deleteBoardConfig(userId, boardId);
-
-    logger.info(`Deleted board config for user ${userId}, board ${boardId}`);
-
-    res.json({
-      success: true,
-      message: 'Board configuration deleted successfully',
-    });
-  } catch (error: any) {
-    logger.error('Error in deleteBoardConfig controller:', error);
-    next(error);
-  }
-};
+  res.json({
+    success: true,
+    message: 'Board configuration deleted successfully',
+  });
+});
 
 /**
  * Test routing for a task
@@ -259,34 +184,24 @@ export const deleteBoardConfig = async (
  *
  * Returns which list the task would be routed to
  */
-export const testRouting = async (
+export const testRouting = asyncHandler(async (
   req: Request,
-  res: Response,
-  next: NextFunction
+  res: Response
 ): Promise<void> => {
-  try {
-    const { boardId } = req.params;
-    const { userId, task } = req.body;
+  const { boardId } = req.params;
+  const { userId, task } = req.body;
 
-    if (!userId || !task) {
-      res.status(400).json({
-        success: false,
-        error: 'userId and task are required',
-      });
-      return;
-    }
-
-    const routing = await boardAutomationService.routeTask(userId, boardId, task);
-
-    res.json({
-      success: true,
-      data: routing,
-    });
-  } catch (error: any) {
-    logger.error('Error in testRouting controller:', error);
-    next(error);
+  if (!userId || !task) {
+    throw new ValidationError('userId and task are required');
   }
-};
+
+  const routing = await boardAutomationService.routeTask(userId, boardId, task);
+
+  res.json({
+    success: true,
+    data: routing,
+  });
+});
 
 /**
  * Create a list on a board
@@ -299,37 +214,25 @@ export const testRouting = async (
  *   position?: 'top' | 'bottom' | number
  * }
  */
-export const createList = async (
+export const createList = asyncHandler(async (
   req: Request,
-  res: Response,
-  next: NextFunction
+  res: Response
 ): Promise<void> => {
-  try {
-    const { boardId } = req.params;
-    const { userId, name, position } = req.body;
+  const { boardId } = req.params;
+  const { userId, name, position } = req.body;
 
-    if (!userId || !name) {
-      res.status(400).json({
-        success: false,
-        error: 'userId and name are required',
-      });
-      return;
-    }
-
-    const list = await trelloService.createList(userId, boardId, name, position);
-
-    logger.info(`Created list "${name}" on board ${boardId} for user ${userId}`);
-
-    res.json({
-      success: true,
-      data: list,
-      message: `List "${name}" created successfully`,
-    });
-  } catch (error: any) {
-    logger.error('Error in createList controller:', error);
-    next(error);
+  if (!userId || !name) {
+    throw new ValidationError('userId and name are required');
   }
-};
+
+  const list = await trelloService.createList(userId, boardId, name, position);
+
+  res.json({
+    success: true,
+    data: list,
+    message: `List "${name}" created successfully`,
+  });
+});
 
 /**
  * Move a card to a different list
@@ -342,49 +245,35 @@ export const createList = async (
  *   position?: 'top' | 'bottom' | number
  * }
  */
-export const moveCard = async (
+export const moveCard = asyncHandler(async (
   req: Request,
-  res: Response,
-  next: NextFunction
+  res: Response
 ): Promise<void> => {
-  try {
-    const { cardId } = req.params;
-    const { userId, targetListId, position } = req.body;
+  const { cardId } = req.params;
+  const { userId, targetListId, position } = req.body;
 
-    if (!userId || !targetListId) {
-      res.status(400).json({
-        success: false,
-        error: 'userId and targetListId are required',
-      });
-      return;
-    }
-
-    const card = await trelloService.moveCard(userId, cardId, targetListId, position);
-
-    logger.info(`Moved card ${cardId} to list ${targetListId} for user ${userId}`);
-
-    res.json({
-      success: true,
-      data: card,
-      message: 'Card moved successfully',
-    });
-  } catch (error: any) {
-    logger.error('Error in moveCard controller:', error);
-    next(error);
+  if (!userId || !targetListId) {
+    throw new ValidationError('userId and targetListId are required');
   }
-};
+
+  const card = await trelloService.moveCard(userId, cardId, targetListId, position);
+
+  res.json({
+    success: true,
+    data: card,
+    message: 'Card moved successfully',
+  });
+});
 
 /**
  * Get template configurations for quick setup
  * GET /api/v1/board-automation/templates
  */
-export const getTemplates = async (
+export const getTemplates = asyncHandler(async (
   req: Request,
-  res: Response,
-  next: NextFunction
+  res: Response
 ): Promise<void> => {
-  try {
-    const templates = [
+  const templates = [
       {
         name: 'Priority-Based',
         description: 'Organize tasks by priority level',
@@ -496,15 +385,11 @@ export const getTemplates = async (
       },
     ];
 
-    res.json({
-      success: true,
-      data: {
-        templates,
-        count: templates.length,
-      },
-    });
-  } catch (error: any) {
-    logger.error('Error in getTemplates controller:', error);
-    next(error);
-  }
-};
+  res.json({
+    success: true,
+    data: {
+      templates,
+      count: templates.length,
+    },
+  });
+});
