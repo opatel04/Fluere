@@ -5,6 +5,7 @@ import boardAutomationService, {
 } from '../services/board-automation.service';
 import trelloService from '../services/trello.service';
 import { asyncHandler } from '../middleware/errorHandler';
+import { successResponse, successWithCount, createdResponse, listResponse } from '../utils/responses';
 import { ValidationError, NotFoundError, ForbiddenError } from '../types/errors';
 
 /**
@@ -30,10 +31,7 @@ export const getBoardConfig = asyncHandler(async (
     throw new NotFoundError('Board configuration');
   }
 
-  res.json({
-    success: true,
-    data: config,
-  });
+  successResponse(res, config);
 });
 
 /**
@@ -49,13 +47,7 @@ export const getUserBoardConfigs = asyncHandler(async (
 
   const configs = await boardAutomationService.getUserBoardConfigs(userId);
 
-  res.json({
-    success: true,
-    data: {
-      configs,
-      count: configs.length,
-    },
-  });
+  successWithCount(res, configs);
 });
 
 /**
@@ -116,11 +108,7 @@ export const saveBoardConfig = asyncHandler(async (
     routingRules as RoutingRule[]
   );
 
-  res.json({
-    success: true,
-    data: config,
-    message: 'Board configuration saved successfully',
-  });
+  successResponse(res, config, 'Board configuration saved successfully');
 });
 
 /**
@@ -139,11 +127,7 @@ export const initializeBoard = asyncHandler(async (
 
   const result = await boardAutomationService.initializeBoard(userId, boardId);
 
-  res.json({
-    success: true,
-    data: result,
-    message: `Created ${result.listsCreated.length} new lists, ${result.listsExisting.length} lists already existed`,
-  });
+  successResponse(res, result, `Created ${result.listsCreated.length} new lists, ${result.listsExisting.length} lists already existed`);
 });
 
 /**
@@ -160,10 +144,7 @@ export const deleteBoardConfig = asyncHandler(async (
 
   await boardAutomationService.deleteBoardConfig(userId, boardId);
 
-  res.json({
-    success: true,
-    message: 'Board configuration deleted successfully',
-  });
+  successResponse(res, {}, 'Board configuration deleted successfully');
 });
 
 /**
@@ -197,10 +178,7 @@ export const testRouting = asyncHandler(async (
 
   const routing = await boardAutomationService.routeTask(userId, boardId, task);
 
-  res.json({
-    success: true,
-    data: routing,
-  });
+  successResponse(res, routing);
 });
 
 /**
@@ -227,11 +205,7 @@ export const createList = asyncHandler(async (
 
   const list = await trelloService.createList(userId, boardId, name, position);
 
-  res.json({
-    success: true,
-    data: list,
-    message: `List "${name}" created successfully`,
-  });
+  successResponse(res, list, `List "${name}" created successfully`);
 });
 
 /**
@@ -258,11 +232,7 @@ export const moveCard = asyncHandler(async (
 
   const card = await trelloService.moveCard(userId, cardId, targetListId, position);
 
-  res.json({
-    success: true,
-    data: card,
-    message: 'Card moved successfully',
-  });
+  successResponse(res, card, 'Card moved successfully');
 });
 
 /**
@@ -385,11 +355,8 @@ export const getTemplates = asyncHandler(async (
       },
     ];
 
-  res.json({
-    success: true,
-    data: {
-      templates,
-      count: templates.length,
-    },
+  successResponse(res, {
+    templates,
+    count: templates.length,
   });
 });

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import FollowUpService from '../services/follow-up.service';
 import { FollowUpStatus, ValidationMessages, ApiMessages } from '../config/constants';
 import { asyncHandler } from '../middleware/errorHandler';
+import { successResponse, successWithCount, createdResponse, listResponse } from '../utils/responses';
 import { ValidationError, NotFoundError } from '../types/errors';
 
 const followUpService = new FollowUpService();
@@ -22,11 +23,7 @@ export const getFollowUps = asyncHandler(async (req: Request, res: Response): Pr
 
   const followUps = await followUpService.getFollowUps(userId, status);
 
-  res.json({
-    success: true,
-    count: followUps.length,
-    data: followUps,
-  });
+  successWithCount(res, followUps);
 });
 
 /**
@@ -38,11 +35,7 @@ export const getUrgentFollowUps = asyncHandler(async (req: Request, res: Respons
   const userId = (req as any).userId;
   const urgentFollowUps = await followUpService.getUrgentFollowUps(userId);
 
-  res.json({
-    success: true,
-    count: urgentFollowUps.length,
-    data: urgentFollowUps,
-  });
+  successWithCount(res, urgentFollowUps);
 });
 
 /**
@@ -59,10 +52,7 @@ export const getFollowUpById = asyncHandler(async (req: Request, res: Response):
     throw new NotFoundError('Follow-up', id);
   }
 
-  res.json({
-    success: true,
-    data: followUp,
-  });
+  successResponse(res, followUp);
 });
 
 /**
@@ -74,10 +64,7 @@ export const getFollowUpStats = asyncHandler(async (req: Request, res: Response)
   const userId = (req as any).userId;
   const stats = await followUpService.getFollowUpStats(userId);
 
-  res.json({
-    success: true,
-    data: stats,
-  });
+  successResponse(res, stats);
 });
 
 /**
@@ -96,10 +83,7 @@ export const dismissFollowUp = asyncHandler(async (req: Request, res: Response):
     throw new NotFoundError('Follow-up', id);
   }
 
-  res.json({
-    success: true,
-    message: ApiMessages.FOLLOWUP_DISMISSED,
-  });
+  successResponse(res, {}, ApiMessages.FOLLOWUP_DISMISSED);
 });
 
 /**
@@ -123,10 +107,7 @@ export const markFollowUpResponded = asyncHandler(async (req: Request, res: Resp
     throw new ValidationError('Failed to mark follow-up as responded');
   }
 
-  res.json({
-    success: true,
-    message: ApiMessages.FOLLOWUP_RESPONDED,
-  });
+  successResponse(res, {}, ApiMessages.FOLLOWUP_RESPONDED);
 });
 
 /**
@@ -145,12 +126,8 @@ export const detectFollowUps = asyncHandler(async (req: Request, res: Response):
 
   const createdCount = await followUpService.detectAndCreateFollowUps(userId, threshold);
 
-  res.json({
-    success: true,
-    message: `Detected ${createdCount} new follow-ups`,
-    data: {
-      createdCount,
-      thresholdDays: threshold,
-    },
-  });
+  successResponse(res, {
+    createdCount,
+    thresholdDays: threshold,
+  }, `Detected ${createdCount} new follow-ups`);
 });

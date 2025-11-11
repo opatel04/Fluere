@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import gmailService from '../services/gmail.service';
 import db from '../config/database';
 import { asyncHandler } from '../middleware/errorHandler';
+import { successResponse, successWithCount, createdResponse, listResponse } from '../utils/responses';
 import { ValidationError } from '../types/errors';
 
 /**
@@ -27,12 +28,9 @@ export const connectGmail = asyncHandler(async (
 
   const authUrl = gmailService.getAuthUrl(userId);
 
-  res.json({
-    success: true,
-    data: {
-      authUrl,
-      message: 'Please visit the URL to authorize Gmail access',
-    },
+  successResponse(res, {
+    authUrl,
+    message: 'Please visit the URL to authorize Gmail access',
   });
 });
 
@@ -93,11 +91,8 @@ export const disconnectGmail = asyncHandler(async (
 
   await gmailService.disconnect(userId);
 
-  res.json({
-    success: true,
-    data: {
-      message: 'Gmail disconnected successfully',
-    },
+  successResponse(res, {
+    message: 'Gmail disconnected successfully',
   });
 });
 
@@ -117,12 +112,9 @@ export const getGmailStatus = asyncHandler(async (
 
   const isConnected = await gmailService.isConnected(userId);
 
-  res.json({
-    success: true,
-    data: {
-      connected: isConnected,
-      service: 'gmail',
-    },
+  successResponse(res, {
+    connected: isConnected,
+    service: 'gmail',
   });
 });
 
@@ -159,13 +151,10 @@ export const fetchEmails = asyncHandler(async (
     gmailService.parseEmail(msg)
   );
 
-  res.json({
-    success: true,
-    data: {
-      emails: parsedEmails,
-      nextPageToken: result.nextPageToken,
-      count: parsedEmails.length,
-    },
+  successResponse(res, {
+    emails: parsedEmails,
+    nextPageToken: result.nextPageToken,
+    count: parsedEmails.length,
   });
 });
 
@@ -190,11 +179,8 @@ export const subscribeToNotifications = asyncHandler(async (
 
   await gmailService.subscribeToNotifications(userId, topicName);
 
-  res.json({
-    success: true,
-    data: {
-      message: 'Subscribed to Gmail notifications successfully',
-    },
+  successResponse(res, {
+    message: 'Subscribed to Gmail notifications successfully',
   });
 });
 
@@ -214,11 +200,8 @@ export const unsubscribeFromNotifications = asyncHandler(async (
 
   await gmailService.unsubscribeFromNotifications(userId);
 
-  res.json({
-    success: true,
-    data: {
-      message: 'Unsubscribed from Gmail notifications successfully',
-    },
+  successResponse(res, {
+    message: 'Unsubscribed from Gmail notifications successfully',
   });
 });
 
@@ -255,10 +238,7 @@ export const handleWebhook = asyncHandler(async (
     );
 
     if (userResult.rows.length === 0) {
-      res.status(200).json({
-        success: true,
-        data: { message: 'No user found for email address' },
-      });
+      successResponse(res, { message: 'No user found for email address' });
       return;
     }
 
@@ -290,25 +270,16 @@ export const handleWebhook = asyncHandler(async (
         }, 3);
       }
 
-      res.status(200).json({
-        success: true,
-        data: {
-          message: 'Webhook received and jobs enqueued',
-          messagesEnqueued: newMessageIds.length,
-        },
+      successResponse(res, {
+        message: 'Webhook received and jobs enqueued',
+        messagesEnqueued: newMessageIds.length,
       });
     } else {
-      res.status(200).json({
-        success: true,
-        data: { message: 'No new messages to process' },
-      });
+      successResponse(res, { message: 'No new messages to process' });
     }
   } catch (error) {
     // Always return 200 to acknowledge receipt (Pub/Sub requirement)
-    res.status(200).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Webhook processing error',
-    });
+    successResponse(res, {}, error instanceof Error ? error.message : 'Webhook processing error');
   }
 });
 

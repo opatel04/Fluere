@@ -13,6 +13,8 @@ import boardAutomationRoutes from './board-automation.routes';
 import simpleBoardRoutes from './simple-board.routes';
 import activityRoutes from './activity.routes';
 import clientRoutes from './client.routes';
+import userRoutes from './user.routes';
+import followUpRoutes from './follow-up.routes';
 
 const router = Router();
 
@@ -31,5 +33,7 @@ router.use('/board-automation', boardAutomationRoutes); // Board automation and 
 router.use('/simple-board', simpleBoardRoutes); // Simple board setup (just create lists)
 router.use('/activity', activityRoutes); // Activity logs and audit trail
 router.use('/clients', clientRoutes); // Freelancer client management (NEW - Pivot Feature)
+router.use('/users', userRoutes); // User account management (GDPR compliance)
+router.use('/follow-ups', followUpRoutes); // Follow-up detection and management
 
 export default router;

@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import { apiLimiter } from '../middleware/rateLimiter';
+import { authenticateToken } from '../middleware/auth.middleware';
 import * as activityController from '../controllers/activity-log.controller';
 
 const router = Router();
 
 // All activity routes require authentication
-// Authentication middleware should be applied at the app level or here
+router.use(authenticateToken);
 
 // Get user's activity logs
 router.get('/', apiLimiter, activityController.getUserActivities);

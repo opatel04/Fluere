@@ -105,6 +105,32 @@ export const optionalAuth = async (
 };
 
 /**
+ * Extract and validate userId from authenticated request
+ * Use this AFTER authenticateToken middleware
+ * Eliminates need for duplicate userId checks in every controller
+ */
+export const extractUserId = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
+  const userId = (req as any).userId;
+
+  if (!userId) {
+    res.status(401).json({
+      success: false,
+      error: 'Unauthorized',
+      message: 'User ID not found in request. Authentication required.',
+    });
+    return;
+  }
+
+  // Attach to request for type-safe access
+  (req as any).userId = userId;
+  next();
+};
+
+/**
  * Fallback for development/testing
  * Accepts userId from body, query, or requires token
  */

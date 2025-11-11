@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import emailProcessorService from '../services/email-processor.service';
 import aiService from '../services/ai.service';
 import { asyncHandler } from '../middleware/errorHandler';
+import { successResponse, successWithCount, createdResponse, listResponse } from '../utils/responses';
 import { ValidationError } from '../types/errors';
 
 /**
@@ -35,10 +36,7 @@ export const processEmail = asyncHandler(async (req: Request, res: Response): Pr
     }
   );
 
-  res.json({
-    success: true,
-    data: result,
-  });
+  successResponse(res, result);
 });
 
 /**
@@ -60,10 +58,7 @@ export const processBatch = asyncHandler(async (req: Request, res: Response): Pr
     listId,
   });
 
-  res.json({
-    success: true,
-    data: result,
-  });
+  successResponse(res, result);
 });
 
 /**
@@ -81,10 +76,7 @@ export const testExtraction = asyncHandler(async (req: Request, res: Response): 
     enableValidation: true,
   });
 
-  res.json({
-    success: true,
-    data: result,
-  });
+  successResponse(res, result);
 });
 
 /**
@@ -108,13 +100,10 @@ export const testFullWorkflow = asyncHandler(async (req: Request, res: Response)
   });
 
   if (!extractionResult.tasks || extractionResult.tasks.length === 0) {
-    res.json({
-      success: true,
-      data: {
-        message: 'No tasks extracted from email',
-        extraction: extractionResult,
-        cardsCreated: [],
-      },
+    successResponse(res, {
+      message: 'No tasks extracted from email',
+      extraction: extractionResult,
+      cardsCreated: [],
     });
     return;
   }
@@ -127,13 +116,10 @@ export const testFullWorkflow = asyncHandler(async (req: Request, res: Response)
     extractionResult.tasks
   );
 
-  res.json({
-    success: true,
-    data: {
-      message: `Extracted ${extractionResult.tasks.length} tasks and created ${createdCards.length} Trello cards`,
-      extraction: extractionResult,
-      cardsCreated: createdCards,
-    },
+  successResponse(res, {
+    message: `Extracted ${extractionResult.tasks.length} tasks and created ${createdCards.length} Trello cards`,
+    extraction: extractionResult,
+    cardsCreated: createdCards,
   });
 });
 
@@ -150,11 +136,8 @@ export const testQuickExtraction = asyncHandler(async (req: Request, res: Respon
 
   const tasks = await aiService.extractTasksQuick(emailContent);
 
-  res.json({
-    success: true,
-    data: {
-      tasks,
-      count: tasks.length,
-    },
+  successResponse(res, {
+    tasks,
+    count: tasks.length,
   });
 });

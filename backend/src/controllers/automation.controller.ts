@@ -4,6 +4,7 @@ import gmailService from '../services/gmail.service';
 import logger from '../config/logger';
 import db from '../config/database';
 import { asyncHandler } from '../middleware/errorHandler';
+import { successResponse, successWithCount, createdResponse, listResponse } from '../utils/responses';
 import { ValidationError, UnprocessableError } from '../types/errors';
 
 /**
@@ -42,13 +43,10 @@ export const processInbox = asyncHandler(async (req: Request, res: Response): Pr
   });
 
   if (emails.messages.length === 0) {
-    res.json({
-      success: true,
-      data: {
-        message: 'No unread emails to process',
-        emailsEnqueued: 0,
-        jobs: [],
-      },
+    successResponse(res, {
+      message: 'No unread emails to process',
+      emailsEnqueued: 0,
+      jobs: [],
     });
     return;
   }
@@ -81,15 +79,12 @@ export const processInbox = asyncHandler(async (req: Request, res: Response): Pr
 
   logger.info(`Enqueued ${jobIds.length} email processing jobs for user ${userId}`);
 
-  res.json({
-    success: true,
-    data: {
-      message: `Processing ${emails.messages.length} emails in background`,
-      emailsEnqueued: emails.messages.length,
-      estimatedTime: `${Math.ceil(emails.messages.length * 8)} seconds`,
-      jobs: jobIds,
-      trackingUrl: `/api/v1/queue/jobs/user/${userId}`,
-    },
+  successResponse(res, {
+    message: `Processing ${emails.messages.length} emails in background`,
+    emailsEnqueued: emails.messages.length,
+    estimatedTime: `${Math.ceil(emails.messages.length * 8)} seconds`,
+    jobs: jobIds,
+    trackingUrl: `/api/v1/queue/jobs/user/${userId}`,
   });
 });
 
@@ -124,12 +119,9 @@ export const processFiltered = asyncHandler(async (req: Request, res: Response):
   });
 
   if (emails.messages.length === 0) {
-    res.json({
-      success: true,
-      data: {
-        message: 'No emails match the filter',
-        emailsEnqueued: 0,
-      },
+    successResponse(res, {
+      message: 'No emails match the filter',
+      emailsEnqueued: 0,
     });
     return;
   }
@@ -151,13 +143,10 @@ export const processFiltered = asyncHandler(async (req: Request, res: Response):
     jobIds.push(jobId);
   }
 
-  res.json({
-    success: true,
-    data: {
-      message: `Processing ${emails.messages.length} filtered emails`,
-      emailsEnqueued: emails.messages.length,
-      jobs: jobIds,
-    },
+  successResponse(res, {
+    message: `Processing ${emails.messages.length} filtered emails`,
+    emailsEnqueued: emails.messages.length,
+    jobs: jobIds,
   });
 });
 
@@ -188,13 +177,10 @@ export const enableAutomation = asyncHandler(async (req: Request, res: Response)
 
   logger.info(`Enabled automation for user ${userId}`);
 
-  res.json({
-    success: true,
-    data: {
-      message: 'Automation enabled! New emails will be processed automatically.',
-      subscription,
-      status: 'active',
-    },
+  successResponse(res, {
+    message: 'Automation enabled! New emails will be processed automatically.',
+    subscription,
+    status: 'active',
   });
 });
 
@@ -219,12 +205,9 @@ export const disableAutomation = asyncHandler(async (req: Request, res: Response
 
   logger.info(`Disabled automation for user ${userId}`);
 
-  res.json({
-    success: true,
-    data: {
-      message: 'Automation disabled. Emails will not be processed automatically.',
-      status: 'inactive',
-    },
+  successResponse(res, {
+    message: 'Automation disabled. Emails will not be processed automatically.',
+    status: 'inactive',
   });
 });
 
@@ -270,15 +253,12 @@ export const getAutomationStatus = asyncHandler(async (req: Request, res: Respon
   const isEnabled = prefsResult.rows.length > 0 && prefsResult.rows[0].auto_process_enabled;
   const hasActiveWatch = watchResult.rows.length > 0 && new Date(watchResult.rows[0].expiration) > new Date();
 
-  res.json({
-    success: true,
-    data: {
-      enabled: isEnabled,
-      watchActive: hasActiveWatch,
-      watch: watchResult.rows[0] || null,
-      stats: statsResult.rows[0],
-      preferences: prefsResult.rows[0] || null,
-    },
+  successResponse(res, {
+    enabled: isEnabled,
+    watchActive: hasActiveWatch,
+    watch: watchResult.rows[0] || null,
+    stats: statsResult.rows[0],
+    preferences: prefsResult.rows[0] || null,
   });
 });
 

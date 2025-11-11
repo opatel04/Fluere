@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import trelloService from '../services/trello.service';
 import { asyncHandler } from '../middleware/errorHandler';
+import { successResponse, successWithCount, createdResponse, listResponse } from '../utils/responses';
 import { ValidationError } from '../types/errors';
 
 /**
@@ -25,12 +26,9 @@ export const connectTrello = asyncHandler(async (
 
   const authUrl = trelloService.getAuthUrl(userId, returnUrl);
 
-  res.json({
-    success: true,
-    data: {
-      authUrl,
-      message: 'Please visit the URL to authorize Trello access',
-    },
+  successResponse(res, {
+    authUrl,
+    message: 'Please visit the URL to authorize Trello access',
   });
 });
 
@@ -58,12 +56,9 @@ export const trelloCallback = asyncHandler(async (
   // Save token to database
   await trelloService.saveToken(userId, token);
 
-  res.json({
-    success: true,
-    data: {
-      message: 'Trello connected successfully',
-      userId,
-    },
+  successResponse(res, {
+    message: 'Trello connected successfully',
+    userId,
   });
 });
 
@@ -83,11 +78,8 @@ export const disconnectTrello = asyncHandler(async (
 
   await trelloService.disconnect(userId);
 
-  res.json({
-    success: true,
-    data: {
-      message: 'Trello disconnected successfully',
-    },
+  successResponse(res, {
+    message: 'Trello disconnected successfully',
   });
 });
 
@@ -107,12 +99,9 @@ export const getTrelloStatus = asyncHandler(async (
 
   const isConnected = await trelloService.isConnected(userId);
 
-  res.json({
-    success: true,
-    data: {
-      connected: isConnected,
-      service: 'trello',
-    },
+  successResponse(res, {
+    connected: isConnected,
+    service: 'trello',
   });
 });
 
@@ -132,13 +121,7 @@ export const getBoards = asyncHandler(async (
 
   const boards = await trelloService.getBoards(userId);
 
-  res.json({
-    success: true,
-    data: {
-      boards,
-      count: boards.length,
-    },
-  });
+  successWithCount(res, boards);
 });
 
 /**
@@ -158,10 +141,7 @@ export const getBoard = asyncHandler(async (
 
   const board = await trelloService.getBoard(userId, boardId);
 
-  res.json({
-    success: true,
-    data: { board },
-  });
+  successResponse(res, { board });
 });
 
 /**
@@ -181,13 +161,7 @@ export const getLists = asyncHandler(async (
 
   const lists = await trelloService.getLists(userId, boardId);
 
-  res.json({
-    success: true,
-    data: {
-      lists,
-      count: lists.length,
-    },
-  });
+  successWithCount(res, lists);
 });
 
 /**
@@ -207,13 +181,7 @@ export const getCards = asyncHandler(async (
 
   const cards = await trelloService.getCards(userId, listId);
 
-  res.json({
-    success: true,
-    data: {
-      cards,
-      count: cards.length,
-    },
-  });
+  successWithCount(res, cards);
 });
 
 /**
@@ -233,10 +201,7 @@ export const getCard = asyncHandler(async (
 
   const card = await trelloService.getCard(userId, cardId);
 
-  res.json({
-    success: true,
-    data: { card },
-  });
+  successResponse(res, { card });
 });
 
 /**
@@ -268,10 +233,7 @@ export const createCard = asyncHandler(async (
     idMembers,
   });
 
-  res.status(201).json({
-    success: true,
-    data: { card },
-  });
+  createdResponse(res, { card });
 });
 
 /**
@@ -299,10 +261,7 @@ export const updateCard = asyncHandler(async (
     pos,
   });
 
-  res.json({
-    success: true,
-    data: { card },
-  });
+  successResponse(res, { card });
 });
 
 /**
@@ -322,11 +281,8 @@ export const deleteCard = asyncHandler(async (
 
   await trelloService.deleteCard(userId, cardId);
 
-  res.json({
-    success: true,
-    data: {
-      message: 'Card deleted successfully',
-    },
+  successResponse(res, {
+    message: 'Card deleted successfully',
   });
 });
 
@@ -352,10 +308,7 @@ export const addComment = asyncHandler(async (
 
   const comment = await trelloService.addComment(userId, cardId, text);
 
-  res.status(201).json({
-    success: true,
-    data: { comment },
-  });
+  createdResponse(res, { comment });
 });
 
 /**
@@ -375,13 +328,7 @@ export const getLabels = asyncHandler(async (
 
   const labels = await trelloService.getLabels(userId, boardId);
 
-  res.json({
-    success: true,
-    data: {
-      labels,
-      count: labels.length,
-    },
-  });
+  successWithCount(res, labels);
 });
 
 /**
@@ -402,10 +349,7 @@ export const updateLabel = asyncHandler(async (
 
   const label = await trelloService.updateLabel(userId, labelId, name, color);
 
-  res.json({
-    success: true,
-    data: { label },
-  });
+  successResponse(res, { label });
 });
 
 /**
@@ -432,14 +376,7 @@ export const searchCards = asyncHandler(async (
 
   const cards = await trelloService.searchCards(userId, query, boardIds);
 
-  res.json({
-    success: true,
-    data: {
-      cards,
-      count: cards.length,
-      query,
-    },
-  });
+  successWithCount(res, cards);
 });
 
 /**
@@ -459,7 +396,5 @@ export const handleWebhook = asyncHandler(async (
   // 3. Update local database if needed
 
   // Acknowledge receipt
-  res.status(200).json({
-    success: true,
-  });
+  successResponse(res, {}, 'Webhook received');
 });

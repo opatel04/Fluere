@@ -29,6 +29,23 @@ export interface EmailTemplate {
   ) => EmailOptions;
   boardConnected: (userName: string, boardName: string) => EmailOptions;
   automationTriggered: (userName: string, automationName: string, result: string) => EmailOptions;
+  taskCreated: (
+    userName: string,
+    taskTitle: string,
+    clientName: string,
+    dueDate?: string
+  ) => EmailOptions;
+  dailyDigest: (
+    userName: string,
+    data: {
+      tasksDueToday: number;
+      tasksDueThisWeek: number;
+      followUpsNeeded: number;
+      atRiskClients: number;
+      recentTasks: Array<{ title: string; client: string; due_date?: string }>;
+      urgentFollowUps: Array<{ client: string; days: number }>;
+    }
+  ) => EmailOptions;
 }
 
 class NotificationService {
@@ -364,6 +381,193 @@ Your automation "${automationName}" has been triggered.
 
 ${result}`,
     }),
+
+    taskCreated: (userName: string, taskTitle: string, clientName: string, dueDate?: string) => ({
+      to: '',
+      subject: `New Task from ${clientName}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #333;">New Task Created 📋</h1>
+          <p style="color: #666; font-size: 16px;">
+            Hi ${userName},
+          </p>
+          <p style="color: #666; font-size: 16px;">
+            A new task has been automatically created from your client email:
+          </p>
+          <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
+            <h3 style="margin: 0 0 10px 0; color: #333;">${taskTitle}</h3>
+            <p style="margin: 5px 0; color: #666;">
+              <strong>Client:</strong> ${clientName}
+            </p>
+            ${
+              dueDate
+                ? `<p style="margin: 5px 0; color: #e67e22;">
+                     <strong>Due:</strong> ${new Date(dueDate).toLocaleDateString()}
+                   </p>`
+                : ''
+            }
+          </div>
+          <p style="color: #666; font-size: 16px;">
+            This task has been added to your Trello board.
+          </p>
+        </div>
+      `,
+      text: `New Task Created
+
+Hi ${userName},
+
+A new task has been automatically created from your client email:
+
+Task: ${taskTitle}
+Client: ${clientName}
+${dueDate ? `Due: ${new Date(dueDate).toLocaleDateString()}` : ''}
+
+This task has been added to your Trello board.`,
+    }),
+
+    dailyDigest: (
+      userName: string,
+      data: {
+        tasksDueToday: number;
+        tasksDueThisWeek: number;
+        followUpsNeeded: number;
+        atRiskClients: number;
+        recentTasks: Array<{ title: string; client: string; due_date?: string }>;
+        urgentFollowUps: Array<{ client: string; days: number }>;
+      }
+    ) => ({
+      to: '',
+      subject: `Your Daily Briefing - ${new Date().toLocaleDateString()}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #333;">Good Morning, ${userName}! ☀️</h1>
+          <p style="color: #666; font-size: 16px;">
+            Here's your daily briefing for ${new Date().toLocaleDateString()}:
+          </p>
+
+          <!-- Overview Stats -->
+          <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
+            <h3 style="margin: 0 0 15px 0; color: #333;">Today's Overview</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div>
+                <span style="font-size: 24px; color: #e74c3c;">${data.tasksDueToday}</span>
+                <p style="margin: 0; color: #666; font-size: 14px;">Tasks Due Today</p>
+              </div>
+              <div>
+                <span style="font-size: 24px; color: #f39c12;">${data.tasksDueThisWeek}</span>
+                <p style="margin: 0; color: #666; font-size: 14px;">Due This Week</p>
+              </div>
+              <div>
+                <span style="font-size: 24px; color: #3498db;">${data.followUpsNeeded}</span>
+                <p style="margin: 0; color: #666; font-size: 14px;">Follow-ups Needed</p>
+              </div>
+              <div>
+                <span style="font-size: 24px; color: ${data.atRiskClients > 0 ? '#e74c3c' : '#27ae60'}">${
+        data.atRiskClients
+      }</span>
+                <p style="margin: 0; color: #666; font-size: 14px;">At-Risk Clients</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent Tasks -->
+          ${
+            data.recentTasks.length > 0
+              ? `
+          <div style="margin: 20px 0;">
+            <h3 style="color: #333;">Recent Tasks</h3>
+            ${data.recentTasks
+              .slice(0, 5)
+              .map(
+                (task) => `
+              <div style="border-left: 3px solid #0079bf; padding: 10px; margin: 10px 0; background-color: #f9f9f9;">
+                <strong style="color: #333;">${task.title}</strong>
+                <p style="margin: 5px 0 0 0; color: #666; font-size: 14px;">
+                  Client: ${task.client}
+                  ${task.due_date ? ` • Due: ${new Date(task.due_date).toLocaleDateString()}` : ''}
+                </p>
+              </div>
+            `
+              )
+              .join('')}
+          </div>
+          `
+              : ''
+          }
+
+          <!-- Urgent Follow-ups -->
+          ${
+            data.urgentFollowUps.length > 0
+              ? `
+          <div style="margin: 20px 0;">
+            <h3 style="color: #e74c3c;">⚠️ Urgent Follow-ups</h3>
+            ${data.urgentFollowUps
+              .slice(0, 5)
+              .map(
+                (followUp) => `
+              <div style="border-left: 3px solid #e74c3c; padding: 10px; margin: 10px 0; background-color: #fff5f5;">
+                <strong style="color: #e74c3c;">${followUp.client}</strong>
+                <p style="margin: 5px 0 0 0; color: #666; font-size: 14px;">
+                  No response for ${followUp.days} days
+                </p>
+              </div>
+            `
+              )
+              .join('')}
+          </div>
+          `
+              : ''
+          }
+
+          <p style="color: #666; font-size: 16px; margin-top: 30px;">
+            Have a productive day! 🚀
+          </p>
+
+          <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+          <p style="color: #999; font-size: 12px;">
+            This is your automated daily briefing from TaskSnap.
+          </p>
+        </div>
+      `,
+      text: `Good Morning, ${userName}!
+
+Here's your daily briefing for ${new Date().toLocaleDateString()}:
+
+TODAY'S OVERVIEW:
+- Tasks Due Today: ${data.tasksDueToday}
+- Due This Week: ${data.tasksDueThisWeek}
+- Follow-ups Needed: ${data.followUpsNeeded}
+- At-Risk Clients: ${data.atRiskClients}
+
+${
+  data.recentTasks.length > 0
+    ? `
+RECENT TASKS:
+${data.recentTasks
+  .slice(0, 5)
+  .map(
+    (task) =>
+      `- ${task.title} (${task.client})${task.due_date ? ` - Due: ${new Date(task.due_date).toLocaleDateString()}` : ''}`
+  )
+  .join('\n')}
+`
+    : ''
+}
+
+${
+  data.urgentFollowUps.length > 0
+    ? `
+URGENT FOLLOW-UPS:
+${data.urgentFollowUps
+  .slice(0, 5)
+  .map((followUp) => `- ${followUp.client} (No response for ${followUp.days} days)`)
+  .join('\n')}
+`
+    : ''
+}
+
+Have a productive day! 🚀`,
+    }),
   };
 
   /**
@@ -433,6 +637,39 @@ ${result}`,
     result: string
   ): Promise<boolean> {
     const template = this.templates.automationTriggered(userName, automationName, result);
+    return this.sendEmail({ ...template, to: email });
+  }
+
+  /**
+   * Send task created notification
+   */
+  async sendTaskCreated(
+    email: string,
+    userName: string,
+    taskTitle: string,
+    clientName: string,
+    dueDate?: string
+  ): Promise<boolean> {
+    const template = this.templates.taskCreated(userName, taskTitle, clientName, dueDate);
+    return this.sendEmail({ ...template, to: email });
+  }
+
+  /**
+   * Send daily digest notification
+   */
+  async sendDailyDigest(
+    email: string,
+    userName: string,
+    data: {
+      tasksDueToday: number;
+      tasksDueThisWeek: number;
+      followUpsNeeded: number;
+      atRiskClients: number;
+      recentTasks: Array<{ title: string; client: string; due_date?: string }>;
+      urgentFollowUps: Array<{ client: string; days: number }>;
+    }
+  ): Promise<boolean> {
+    const template = this.templates.dailyDigest(userName, data);
     return this.sendEmail({ ...template, to: email });
   }
 }

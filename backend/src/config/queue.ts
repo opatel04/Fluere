@@ -26,6 +26,8 @@ export enum JobType {
   BATCH_PROCESSING = 'batch_processing',
   TRELLO_SYNC = 'trello_sync',
   TOKEN_REFRESH = 'token_refresh',
+  FOLLOW_UP_SCAN = 'follow_up_scan',
+  DAILY_SUMMARY = 'daily_summary',
 }
 
 // Job data interfaces
@@ -52,6 +54,15 @@ export interface TokenRefreshJob {
   userId: string;
 }
 
+export interface FollowUpScanJob {
+  userId?: string; // If not specified, scan for all users
+  thresholdDays?: number;
+}
+
+export interface DailySummaryJob {
+  userId?: string; // If not specified, generate for all users
+}
+
 // Create queues
 export const emailQueue = new Queue<EmailProcessingJob>(
   'email-processing',
@@ -70,6 +81,16 @@ export const trelloQueue = new Queue<TrelloSyncJob>(
 
 export const maintenanceQueue = new Queue<TokenRefreshJob>(
   'maintenance',
+  queueConfig
+);
+
+export const followUpQueue = new Queue<FollowUpScanJob>(
+  'follow-up-scan',
+  queueConfig
+);
+
+export const dailySummaryQueue = new Queue<DailySummaryJob>(
+  'daily-summary',
   queueConfig
 );
 
@@ -108,6 +129,8 @@ setupQueueEventHandlers(emailQueue, 'EmailQueue');
 setupQueueEventHandlers(batchQueue, 'BatchQueue');
 setupQueueEventHandlers(trelloQueue, 'TrelloQueue');
 setupQueueEventHandlers(maintenanceQueue, 'MaintenanceQueue');
+setupQueueEventHandlers(followUpQueue, 'FollowUpQueue');
+setupQueueEventHandlers(dailySummaryQueue, 'DailySummaryQueue');
 
 // Helper functions to add jobs
 export const addEmailProcessingJob = async (
@@ -170,17 +193,28 @@ export const closeQueues = async (): Promise<void> => {
     batchQueue.close(),
     trelloQueue.close(),
     maintenanceQueue.close(),
+    followUpQueue.close(),
+    dailySummaryQueue.close(),
   ]);
   logger.info('All queues closed');
 };
 
 // Queue status/monitoring
 export const getQueueStatus = async () => {
-  const [emailCounts, batchCounts, trelloCounts, maintenanceCounts] = await Promise.all([
+  const [
+    emailCounts,
+    batchCounts,
+    trelloCounts,
+    maintenanceCounts,
+    followUpCounts,
+    dailySummaryCounts,
+  ] = await Promise.all([
     emailQueue.getJobCounts(),
     batchQueue.getJobCounts(),
     trelloQueue.getJobCounts(),
     maintenanceQueue.getJobCounts(),
+    followUpQueue.getJobCounts(),
+    dailySummaryQueue.getJobCounts(),
   ]);
 
   return {
@@ -188,6 +222,8 @@ export const getQueueStatus = async () => {
     batch: batchCounts,
     trello: trelloCounts,
     maintenance: maintenanceCounts,
+    followUp: followUpCounts,
+    dailySummary: dailySummaryCounts,
   };
 };
 
@@ -196,6 +232,8 @@ export default {
   batchQueue,
   trelloQueue,
   maintenanceQueue,
+  followUpQueue,
+  dailySummaryQueue,
   addEmailProcessingJob,
   addBatchProcessingJob,
   addTrelloSyncJob,

@@ -4,6 +4,7 @@ import logger from '../config/logger';
 import { query } from '../config/database';
 import { TaskContext, PriorityListKeywords, AIModels, ValidationMessages, ApiMessages } from '../config/constants';
 import { asyncHandler } from '../middleware/errorHandler';
+import { successResponse, successWithCount, createdResponse, listResponse } from '../utils/responses';
 import { ValidationError } from '../types/errors';
 
 /**
@@ -119,30 +120,26 @@ export const extractManualTasks = asyncHandler(async (req: Request, res: Respons
     };
   });
 
-  res.json({
-    success: true,
-    message: `Extracted ${taskSuggestions.length} task suggestion${taskSuggestions.length !== 1 ? 's' : ''}`,
-    data: {
-      tasks: taskSuggestions,
-      availableBoards: boards.rows.map((row: any) => ({
-        id: row.trello_board_id,
-        name: row.board_name,
-        lists: boards.rows
-          .filter((b: any) => b.trello_board_id === row.trello_board_id)
-          .map((b: any) => ({
-            id: b.trello_list_id,
-            name: b.list_name,
-          })),
-      })),
-      availableClients: clients.rows.map((row: any) => ({
-        id: row.id,
-        name: row.name,
-        email: row.email,
-      })),
-      context: textContext,
-      confidence: result.confidence,
-    },
-  });
+  successResponse(res, {
+    tasks: taskSuggestions,
+    availableBoards: boards.rows.map((row: any) => ({
+      id: row.trello_board_id,
+      name: row.board_name,
+      lists: boards.rows
+        .filter((b: any) => b.trello_board_id === row.trello_board_id)
+        .map((b: any) => ({
+          id: b.trello_list_id,
+          name: b.list_name,
+        })),
+    })),
+    availableClients: clients.rows.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      email: row.email,
+    })),
+    context: textContext,
+    confidence: result.confidence,
+  }, `Extracted ${taskSuggestions.length} task suggestion${taskSuggestions.length !== 1 ? 's' : ''}`);
 
   logger.info('Manual task extraction completed', {
     userId,
@@ -215,15 +212,11 @@ export const acceptSuggestedTasks = asyncHandler(async (req: Request, res: Respo
     }
   }
 
-  res.json({
-    success: true,
-    message: ApiMessages.TASKS_ACCEPTED,
-    data: {
-      tasks: createdTasks,
-      created: createdTasks.length,
-      requested: tasks.length,
-    },
-  });
+  successResponse(res, {
+    tasks: createdTasks,
+    created: createdTasks.length,
+    requested: tasks.length,
+  }, ApiMessages.TASKS_ACCEPTED);
 
   logger.info('Task acceptance completed', {
     userId,
@@ -253,10 +246,7 @@ export const rejectSuggestedTasks = asyncHandler(async (req: Request, res: Respo
   // Log rejection for analytics
   // TODO: Could store rejections for improving AI extraction
 
-  res.json({
-    success: true,
-    message: ApiMessages.TASKS_REJECTED,
-  });
+  successResponse(res, {}, ApiMessages.TASKS_REJECTED);
 });
 
 /**
@@ -272,18 +262,14 @@ export const editSuggestedTask = asyncHandler(async (req: Request, res: Response
   // This is just for the frontend state - no database changes yet
   // Tasks are only saved when user accepts them
 
-  res.json({
-    success: true,
-    message: ApiMessages.SUGGESTION_UPDATED,
-    data: {
-      id: tempId,
-      title,
-      description,
-      dueDate,
-      priority,
-      boardId,
-      listId,
-      clientId,
-    },
-  });
+  successResponse(res, {
+    id: tempId,
+    title,
+    description,
+    dueDate,
+    priority,
+    boardId,
+    listId,
+    clientId,
+  }, ApiMessages.SUGGESTION_UPDATED);
 });

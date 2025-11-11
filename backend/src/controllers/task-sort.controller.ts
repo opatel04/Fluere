@@ -3,6 +3,7 @@ import taskSortService, { SortOption, FilterOption } from '../services/task-sort
 import logger from '../config/logger';
 import { ExtractedTask } from '../types/ai.types';
 import { asyncHandler } from '../middleware/errorHandler';
+import { successResponse, successWithCount, createdResponse, listResponse } from '../utils/responses';
 import { ValidationError } from '../types/errors';
 
 /**
@@ -17,10 +18,7 @@ class TaskSortController {
   getOptions = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const options = taskSortService.getAvailableOptions();
 
-    res.status(200).json({
-      success: true,
-      data: options,
-    });
+    successResponse(res, options);
   });
 
   /**
@@ -50,15 +48,12 @@ class TaskSortController {
       userCurrentDate,
     });
 
-    res.status(200).json({
-      success: true,
-      data: {
-        tasks: sortedTasks,
-        count: sortedTasks.length,
-        originalCount: tasks.length,
-        sortBy,
-        filters,
-      },
+    successResponse(res, {
+      tasks: sortedTasks,
+      count: sortedTasks.length,
+      originalCount: tasks.length,
+      sortBy,
+      filters,
     });
   });
 
@@ -92,15 +87,12 @@ class TaskSortController {
       userCurrentDate,
     });
 
-    res.status(200).json({
-      success: true,
-      data: {
-        tasks: result.sortedTasks,
-        count: result.sortedTasks.length,
-        originalCount: tasks.length,
-        explanation: result.explanation,
-        sortCriteria: result.sortCriteria,
-      },
+    successResponse(res, {
+      tasks: result.sortedTasks,
+      count: result.sortedTasks.length,
+      originalCount: tasks.length,
+      explanation: result.explanation,
+      sortCriteria: result.sortCriteria,
     });
   });
 }

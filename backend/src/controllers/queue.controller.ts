@@ -3,6 +3,7 @@ import { getQueueStatus } from '../config/queue';
 import logger from '../config/logger';
 import db from '../config/database';
 import { asyncHandler } from '../middleware/errorHandler';
+import { successResponse, successWithCount, createdResponse, listResponse } from '../utils/responses';
 import { NotFoundError } from '../types/errors';
 
 /**
@@ -17,12 +18,9 @@ import { NotFoundError } from '../types/errors';
 export const getStatus = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const queueStats = await getQueueStatus();
 
-  res.json({
-    success: true,
-    data: {
-      queues: queueStats,
-      timestamp: new Date().toISOString(),
-    },
+  successResponse(res, {
+    queues: queueStats,
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -61,12 +59,9 @@ export const getUserJobs = asyncHandler(async (req: Request, res: Response): Pro
 
   const result = await db.query(query, params);
 
-  res.json({
-    success: true,
-    data: {
-      jobs: result.rows,
-      count: result.rows.length,
-    },
+  successResponse(res, {
+    jobs: result.rows,
+    count: result.rows.length,
   });
 });
 
@@ -98,10 +93,7 @@ export const getJobDetails = asyncHandler(async (req: Request, res: Response): P
     throw new NotFoundError('Job', jobId);
   }
 
-  res.json({
-    success: true,
-    data: result.rows[0],
-  });
+  successResponse(res, result.rows[0]);
 });
 
 /**
@@ -136,11 +128,8 @@ export const getUserStats = asyncHandler(async (req: Request, res: Response): Pr
     [userId]
   );
 
-  res.json({
-    success: true,
-    data: {
-      statistics: statsResult.rows,
-      recentJobs: recentJobsResult.rows,
-    },
+  successResponse(res, {
+    statistics: statsResult.rows,
+    recentJobs: recentJobsResult.rows,
   });
 });

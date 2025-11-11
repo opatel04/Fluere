@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import activityLogService, { ActivityLogFilter } from '../services/activity-log.service';
 import { asyncHandler } from '../middleware/errorHandler';
+import { successResponse, successWithCount, createdResponse, listResponse } from '../utils/responses';
 import { UnauthorizedError } from '../types/errors';
 
 /**
@@ -32,8 +33,7 @@ export const getUserActivities = asyncHandler(async (req: Request, res: Response
 
   const activities = await activityLogService.getActivities(filter);
 
-  res.json({
-    success: true,
+  successResponse(res, {
     count: activities.length,
     activities,
   });
@@ -52,8 +52,7 @@ export const getUserActivityStats = asyncHandler(async (req: Request, res: Respo
   const days = parseInt(req.query.days as string) || 30;
   const stats = await activityLogService.getUserStats(userId, days);
 
-  res.json({
-    success: true,
+  successResponse(res, {
     period: `${days} days`,
     stats,
   });
@@ -72,8 +71,7 @@ export const getRecentFailures = asyncHandler(async (req: Request, res: Response
   const limit = parseInt(req.query.limit as string) || 10;
   const failures = await activityLogService.getRecentFailures(userId, limit);
 
-  res.json({
-    success: true,
+  successResponse(res, {
     count: failures.length,
     failures,
   });
@@ -105,8 +103,5 @@ export const getActivityTimeline = asyncHandler(async (req: Request, res: Respon
     timeline[date].push(activity);
   });
 
-  res.json({
-    success: true,
-    timeline,
-  });
+  successResponse(res, { timeline });
 });

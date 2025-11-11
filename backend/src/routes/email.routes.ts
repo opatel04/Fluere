@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { apiLimiter } from '../middleware/rateLimiter';
 import * as gmailController from '../controllers/gmail.controller';
 import * as inboundEmailController from '../controllers/inbound-email.controller';
-import { verifyGmailWebhook, webhookRateLimiter, webhookLogger } from '../middleware/webhookVerification';
+import { verifyGmailWebhook, verifyResendWebhook, webhookRateLimiter, webhookLogger } from '../middleware/webhookVerification';
 import { authenticateToken } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -44,6 +44,7 @@ router.post('/unsubscribe', apiLimiter, gmailController.unsubscribeFromNotificat
 router.post('/inbound',
   webhookLogger('inbound'),
   webhookRateLimiter(200, 60000), // Allow 200 emails per minute
+  verifyResendWebhook, // Verify Svix signature from Resend
   inboundEmailController.receiveInboundEmail
 );
 

@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { apiLimiter } from '../middleware/rateLimiter';
 import * as clientController from '../controllers/client.controller';
-import { authenticateToken } from '../middleware/auth.middleware';
+import { authenticateToken, extractUserId } from '../middleware/auth.middleware';
 
 const router = Router();
 
-// All client routes require authentication
+// All client routes require authentication and userId extraction
 router.use(authenticateToken);
+router.use(extractUserId);
 
 /**
  * Client Management Routes

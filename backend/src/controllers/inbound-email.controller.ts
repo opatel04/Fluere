@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import InboundEmailService from '../services/inbound-email.service';
 import logger from '../config/logger';
 import { asyncHandler } from '../middleware/errorHandler';
+import { successResponse, successWithCount, createdResponse, listResponse } from '../utils/responses';
 import { ValidationError, UnauthorizedError, NotFoundError } from '../types/errors';
 
 /**
@@ -83,10 +84,7 @@ export const processInboundEmailManual = asyncHandler(async (
 
   const result = await inboundEmailService.processInboundEmail(emailData, userId);
 
-  res.json({
-    success: result.success,
-    data: result,
-  });
+  successResponse(res, result);
 });
 
 /**
@@ -124,10 +122,7 @@ export const getInboundEmail = asyncHandler(async (
     throw new NotFoundError('Inbound email', id);
   }
 
-  res.json({
-    success: true,
-    data: result.rows[0],
-  });
+  successResponse(res, result.rows[0]);
 });
 
 /**
@@ -185,14 +180,11 @@ export const listInboundEmails = asyncHandler(async (
     status ? [userId, status] : [userId]
   );
 
-  res.json({
-    success: true,
-    data: {
-      emails: result.rows,
-      total: parseInt(countResult.rows[0].total),
-      limit: parseInt(limit as string),
-      offset: parseInt(offset as string),
-    },
+  successResponse(res, {
+    emails: result.rows,
+    total: parseInt(countResult.rows[0].total),
+    limit: parseInt(limit as string),
+    offset: parseInt(offset as string),
   });
 });
 
@@ -239,10 +231,7 @@ export const retryInboundEmail = asyncHandler(async (
   const emailData = JSON.parse(inboundEmail.raw_data);
   const processResult = await inboundEmailService.processInboundEmail(emailData, userId);
 
-  res.json({
-    success: processResult.success,
-    data: processResult,
-  });
+  successResponse(res, processResult);
 });
 
 export default {

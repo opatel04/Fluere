@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import trelloService from '../services/trello.service';
 import logger from '../config/logger';
 import { asyncHandler } from '../middleware/errorHandler';
+import { successResponse, successWithCount, createdResponse, listResponse } from '../utils/responses';
 import { ValidationError } from '../types/errors';
 
 /**
@@ -42,12 +43,9 @@ export const getPresets = asyncHandler(async (req: Request, res: Response): Prom
     },
   };
 
-  res.json({
-    success: true,
-    data: {
-      presets,
-      message: 'Choose a preset or create your own custom lists',
-    },
+  successResponse(res, {
+    presets,
+    message: 'Choose a preset or create your own custom lists',
   });
 });
 
@@ -142,15 +140,12 @@ export const createLists = asyncHandler(async (req: Request, res: Response): Pro
 
   logger.info(`Board setup complete: ${message}`);
 
-  res.json({
-    success: true,
-    data: {
-      created: results.created,
-      alreadyExists: results.alreadyExists,
-      failed: results.failed,
-      total: listNames.length,
-      message: message.trim(),
-    },
+  successResponse(res, {
+    created: results.created,
+    alreadyExists: results.alreadyExists,
+    failed: results.failed,
+    total: listNames.length,
+    message: message.trim(),
   });
 });
 
@@ -165,15 +160,12 @@ export const getLists = asyncHandler(async (req: Request, res: Response): Promis
 
   const lists = await trelloService.getLists(userId, boardId);
 
-  res.json({
-    success: true,
-    data: {
-      lists: lists.map(l => ({
-        id: l.id,
-        name: l.name,
-        position: l.pos,
-      })),
-      count: lists.length,
-    },
+  successResponse(res, {
+    lists: lists.map(l => ({
+      id: l.id,
+      name: l.name,
+      position: l.pos,
+    })),
+    count: lists.length,
   });
 });
