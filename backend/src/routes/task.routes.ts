@@ -37,4 +37,7 @@ router.delete('/pending/:id', apiLimiter, pendingTaskController.deletePendingTas
 router.post('/pending/:id/approve', apiLimiter, pendingTaskController.approvePendingTask);
 router.post('/pending/:id/reject', apiLimiter, pendingTaskController.rejectPendingTask);
 
+// Pending tasks - Generate AI description on-demand (lazy loading)
+router.post('/pending/:id/generate', apiLimiter, pendingTaskController.generateTaskDescription);
+
 export default router;

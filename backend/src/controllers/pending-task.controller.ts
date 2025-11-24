@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import db from '../config/database';
 import trelloService from '../services/trello.service';
+import emailProcessorService from '../services/email-processor.service';
 import logger from '../config/logger';
 import { asyncHandler } from '../middleware/errorHandler';
 import { successResponse, createdResponse, listResponse } from '../utils/responses';
@@ -67,6 +68,31 @@ export const getPendingTaskById = asyncHandler(async (req: Request, res: Respons
   }
 
   successResponse(res, result.rows[0]);
+});
+
+/**
+ * Generate AI description for a pending task (on-demand)
+ * POST /api/v1/tasks/pending/:id/generate
+ * This is the lazy loading endpoint - only calls AI when user clicks on a task
+ */
+export const generateTaskDescription = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const userId = (req as any).userId;
+  const { id } = req.params;
+
+  logger.info(`Generating AI description for task ${id}`);
+
+  const result = await emailProcessorService.generateTaskDescription(userId, id);
+
+  // Fetch the updated task
+  const taskResult = await db.query(
+    `SELECT * FROM pending_tasks WHERE id = $1 AND user_id = $2`,
+    [id, userId]
+  );
+
+  successResponse(res, {
+    ...result,
+    task: taskResult.rows[0],
+  });
 });
 
 /**

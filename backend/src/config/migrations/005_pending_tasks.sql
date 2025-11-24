@@ -1,6 +1,7 @@
 -- Pending Tasks Table
 -- Migration: 005_pending_tasks
--- Stores AI-extracted tasks awaiting user approval before creating Trello cards
+-- Stores email-based tasks awaiting user approval before creating Trello cards
+-- Option B: Lazy loading - AI description generated on-demand when user clicks
 
 CREATE TABLE IF NOT EXISTS pending_tasks (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -10,9 +11,10 @@ CREATE TABLE IF NOT EXISTS pending_tasks (
     email_from VARCHAR(255),
     email_date TIMESTAMP,
 
-    -- Task details extracted by AI
+    -- Task details (title from email subject initially, description generated on-demand)
     title VARCHAR(500) NOT NULL,
-    description TEXT,
+    description TEXT, -- NULL until AI generates it on-demand
+    snippet TEXT, -- Email snippet for preview (no AI needed)
     priority VARCHAR(20) DEFAULT 'medium',
     category VARCHAR(100),
     due_date TIMESTAMP,
@@ -22,6 +24,7 @@ CREATE TABLE IF NOT EXISTS pending_tasks (
     -- Extraction metadata
     confidence FLOAT,
     extraction_source VARCHAR(50) DEFAULT 'automation', -- 'automation', 'manual'
+    ai_processed BOOLEAN DEFAULT false, -- true after AI generates description
 
     -- Status tracking
     status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'approved', 'rejected'

@@ -40,9 +40,9 @@ emailQueue.process(5, async (job: Job<EmailProcessingJob>) => {
       ]
     );
 
-    // Process the email to pending queue (for user approval workflow)
-    // This extracts tasks with AI and saves them to pending_tasks table
-    const result = await emailProcessorService.processEmailToPending(userId, messageId);
+    // Process the email to pending queue using FAST method (no AI)
+    // Just stores email metadata - AI description generated on-demand when user clicks
+    const result = await emailProcessorService.processEmailToPendingFast(userId, messageId);
 
     // Update job status to completed
     await db.query(
@@ -54,18 +54,16 @@ emailQueue.process(5, async (job: Job<EmailProcessingJob>) => {
       ['completed', JSON.stringify(result), job.id]
     );
 
-    // Update email status in database
+    // Update email status in database (fast processing = 1 task per email, no confidence yet)
     await db.query(
       `UPDATE emails
        SET processing_status = $1,
            tasks_count = $2,
-           processing_confidence = $3,
            processed_at = NOW()
-       WHERE message_id = $4 AND user_id = $5`,
+       WHERE message_id = $3 AND user_id = $4`,
       [
         'completed',
-        result.tasksExtracted,
-        result.confidence,
+        result.taskSaved ? 1 : 0,
         messageId,
         userId,
       ]
@@ -73,11 +71,10 @@ emailQueue.process(5, async (job: Job<EmailProcessingJob>) => {
 
     const processingTime = Date.now() - startTime;
 
-    logger.info('Email job completed successfully', {
+    logger.info('Email job completed successfully (fast mode)', {
       jobId: job.id,
-      tasksExtracted: result.tasksExtracted,
-      tasksSaved: result.tasksSaved,
-      confidence: result.confidence,
+      taskSaved: result.taskSaved,
+      taskId: result.taskId,
       processingTimeMs: processingTime,
     });
 

@@ -120,8 +120,290 @@ class EmailProcessorService {
   }
 
   /**
+   * FAST: Process email to pending queue WITHOUT AI (Option B - lazy loading)
+   * Just stores email metadata with heuristic-based priority
+   * Description is generated on-demand when user clicks
+   */
+  async processEmailToPendingFast(
+    userId: string,
+    messageId: string
+  ): Promise<{
+    success: boolean;
+    taskSaved: boolean;
+    taskId?: string;
+  }> {
+    const startTime = Date.now();
+
+    try {
+      logger.info(`Fast processing email ${messageId} for user ${userId}`);
+
+      // Step 1: Fetch email from Gmail
+      const emailMessage = await gmailService.getEmailById(userId, messageId);
+
+      if (!emailMessage) {
+        throw new Error(`Email ${messageId} not found`);
+      }
+
+      const email = gmailService.parseEmail(emailMessage);
+
+      // Step 2: Check if already processed
+      const existing = await db.query(
+        `SELECT id FROM pending_tasks WHERE email_id = $1 AND user_id = $2`,
+        [messageId, userId]
+      );
+
+      if (existing.rows.length > 0) {
+        logger.info(`Email ${messageId} already processed, skipping`);
+        return { success: true, taskSaved: false };
+      }
+
+      // Step 3: Detect priority using heuristics (NO AI)
+      const priority = this.detectPriorityFromEmail(email);
+      const labels = this.detectLabelsFromEmail(email);
+      const dueDate = this.detectDueDateFromEmail(email);
+
+      // Step 4: Save to pending_tasks (description is NULL - generated on-demand)
+      const result = await db.query(
+        `INSERT INTO pending_tasks (
+          user_id, email_id, email_subject, email_from, email_date,
+          title, description, snippet, priority, category, due_date,
+          labels, confidence, extraction_source, status, ai_processed
+        ) VALUES ($1, $2, $3, $4, $5, $6, NULL, $7, $8, $9, $10, $11, NULL, 'automation', 'pending', false)
+        RETURNING id`,
+        [
+          userId,
+          messageId,
+          email.subject,
+          email.from,
+          email.date,
+          email.subject, // title = subject initially
+          email.snippet || email.body?.substring(0, 200) || '',
+          priority,
+          null, // category set by AI later
+          dueDate,
+          JSON.stringify(labels),
+        ]
+      );
+
+      const processingTime = Date.now() - startTime;
+      logger.info(`Fast processed email ${messageId} in ${processingTime}ms`);
+
+      return {
+        success: true,
+        taskSaved: true,
+        taskId: result.rows[0].id,
+      };
+    } catch (error) {
+      logger.error('Error in fast email processing:', error);
+      throw new Error('Failed to process email');
+    }
+  }
+
+  /**
+   * Detect priority from email using heuristics (no AI)
+   */
+  private detectPriorityFromEmail(email: any): string {
+    const subject = (email.subject || '').toLowerCase();
+    const snippet = (email.snippet || '').toLowerCase();
+    const combined = `${subject} ${snippet}`;
+
+    // Urgent indicators
+    const urgentPatterns = [
+      /urgent/i, /asap/i, /immediately/i, /critical/i, /emergency/i,
+      /time.?sensitive/i, /action.?required/i, /respond.?today/i,
+      /deadline.?today/i, /due.?today/i, /expires?.?today/i,
+    ];
+
+    // High priority indicators
+    const highPatterns = [
+      /important/i, /priority/i, /reminder/i, /follow.?up/i,
+      /deadline/i, /due.?date/i, /assignment/i, /graded/i,
+      /action.?needed/i, /please.?review/i, /waiting.?for/i,
+    ];
+
+    // Low priority indicators (promotional, etc)
+    const lowPatterns = [
+      /sale/i, /discount/i, /off\s/i, /% off/i, /promo/i,
+      /newsletter/i, /unsubscribe/i, /deal/i, /offer/i,
+      /black.?friday/i, /cyber.?monday/i, /limited.?time/i,
+    ];
+
+    for (const pattern of urgentPatterns) {
+      if (pattern.test(combined)) return 'urgent';
+    }
+
+    for (const pattern of highPatterns) {
+      if (pattern.test(combined)) return 'high';
+    }
+
+    for (const pattern of lowPatterns) {
+      if (pattern.test(combined)) return 'low';
+    }
+
+    return 'medium';
+  }
+
+  /**
+   * Detect labels from email using heuristics
+   */
+  private detectLabelsFromEmail(email: any): string[] {
+    const subject = (email.subject || '').toLowerCase();
+    const from = (email.from || '').toLowerCase();
+    const labels: string[] = [];
+
+    // Academic
+    if (/assignment|graded|course|class|professor|edu/i.test(`${subject} ${from}`)) {
+      labels.push('Academic');
+    }
+
+    // Shopping/Promotional
+    if (/sale|discount|order|shipping|delivery|shop/i.test(subject)) {
+      labels.push('Shopping');
+    }
+
+    // Work
+    if (/meeting|project|deadline|review|report/i.test(subject)) {
+      labels.push('Work');
+    }
+
+    // Finance
+    if (/payment|invoice|receipt|bank|credit|bill/i.test(subject)) {
+      labels.push('Finance');
+    }
+
+    return labels;
+  }
+
+  /**
+   * Detect due date from email using heuristics
+   */
+  private detectDueDateFromEmail(email: any): string | null {
+    const subject = (email.subject || '').toLowerCase();
+    const snippet = (email.snippet || '').toLowerCase();
+    const combined = `${subject} ${snippet}`;
+
+    // Today patterns
+    if (/today|ends?.?today|due.?today|expires?.?today/i.test(combined)) {
+      return new Date().toISOString();
+    }
+
+    // Tomorrow patterns
+    if (/tomorrow|due.?tomorrow/i.test(combined)) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      return tomorrow.toISOString();
+    }
+
+    // This week patterns
+    if (/this.?week|end.?of.?week/i.test(combined)) {
+      const endOfWeek = new Date();
+      endOfWeek.setDate(endOfWeek.getDate() + (7 - endOfWeek.getDay()));
+      return endOfWeek.toISOString();
+    }
+
+    return null;
+  }
+
+  /**
+   * Generate AI description on-demand for a pending task
+   */
+  async generateTaskDescription(
+    userId: string,
+    taskId: string
+  ): Promise<{
+    success: boolean;
+    description?: string;
+    category?: string;
+    priority?: string;
+    dueDate?: string;
+  }> {
+    try {
+      // Get the task and its email
+      const taskResult = await db.query(
+        `SELECT * FROM pending_tasks WHERE id = $1 AND user_id = $2`,
+        [taskId, userId]
+      );
+
+      if (taskResult.rows.length === 0) {
+        throw new Error('Task not found');
+      }
+
+      const task = taskResult.rows[0];
+
+      // If already processed, return existing data
+      if (task.ai_processed && task.description) {
+        return {
+          success: true,
+          description: task.description,
+          category: task.category,
+          priority: task.priority,
+          dueDate: task.due_date,
+        };
+      }
+
+      // Fetch the original email
+      const emailMessage = await gmailService.getEmailById(userId, task.email_id);
+      if (!emailMessage) {
+        throw new Error('Original email not found');
+      }
+
+      const email = gmailService.parseEmail(emailMessage);
+      const emailContent = this.formatEmailForAI(email);
+
+      // Process with AI
+      const extraction = await aiService.processEmailWithValidation(emailContent);
+
+      // Get the best task from extraction (or create one from email)
+      const extractedTask = extraction.tasks[0] || {
+        name: email.subject,
+        description: `From: ${email.from}\n\n${email.body?.substring(0, 500) || email.snippet}`,
+        priority: task.priority,
+        category: null,
+        dueDate: task.due_date,
+      };
+
+      // Update the task with AI-generated data
+      await db.query(
+        `UPDATE pending_tasks SET
+          title = COALESCE($1, title),
+          description = $2,
+          priority = COALESCE($3, priority),
+          category = $4,
+          due_date = COALESCE($5, due_date),
+          ai_processed = true,
+          confidence = $6,
+          updated_at = NOW()
+        WHERE id = $7`,
+        [
+          extractedTask.name,
+          extractedTask.description,
+          extractedTask.priority,
+          extractedTask.category || null,
+          extractedTask.dueDate || null,
+          extraction.confidence,
+          taskId,
+        ]
+      );
+
+      logger.info(`Generated AI description for task ${taskId}`);
+
+      return {
+        success: true,
+        description: extractedTask.description,
+        category: extractedTask.category,
+        priority: extractedTask.priority,
+        dueDate: extractedTask.dueDate,
+      };
+    } catch (error) {
+      logger.error('Error generating task description:', error);
+      throw new Error('Failed to generate description');
+    }
+  }
+
+  /**
    * Process a single email and save tasks to pending queue (for approval workflow)
    * Instead of creating Trello cards directly, saves extracted tasks to pending_tasks table
+   * NOTE: This is the SLOW method with full AI processing - use processEmailToPendingFast for speed
    */
   async processEmailToPending(
     userId: string,
@@ -188,8 +470,8 @@ class EmailProcessorService {
             `INSERT INTO pending_tasks (
               user_id, email_id, email_subject, email_from, email_date,
               title, description, priority, category, due_date, estimated_time,
-              labels, confidence, extraction_source, status
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'automation', 'pending')
+              labels, confidence, extraction_source, status, ai_processed
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'automation', 'pending', true)
             RETURNING id`,
             [
               userId,
