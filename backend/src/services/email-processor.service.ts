@@ -3,6 +3,7 @@ import trelloService from './trello.service';
 import aiService from './ai.service';
 import taskIntelligenceService from './task-intelligence.service';
 import boardAutomationService from './board-automation.service';
+import db from '../config/database';
 import logger from '../config/logger';
 import { ExtractedTask, ProcessingOptions } from '../types/ai.types';
 
@@ -41,17 +42,14 @@ class EmailProcessorService {
     try {
       logger.info(`Processing email ${messageId} for user ${userId}`);
 
-      // Step 1: Fetch email from Gmail
-      const emails = await gmailService.fetchEmails(userId, {
-        maxResults: 1,
-        query: `rfc822msgid:${messageId}`,
-      });
+      // Step 1: Fetch email from Gmail by its Gmail message ID
+      const emailMessage = await gmailService.getEmailById(userId, messageId);
 
-      if (emails.messages.length === 0) {
+      if (!emailMessage) {
         throw new Error(`Email ${messageId} not found`);
       }
 
-      const email = gmailService.parseEmail(emails.messages[0]);
+      const email = gmailService.parseEmail(emailMessage);
 
       // Step 2: Extract tasks using layered AI approach
       const emailContent = this.formatEmailForAI(email);
@@ -118,6 +116,198 @@ class EmailProcessorService {
     } catch (error) {
       logger.error('Error processing email to Trello:', error);
       throw new Error('Failed to process email');
+    }
+  }
+
+  /**
+   * Process a single email and save tasks to pending queue (for approval workflow)
+   * Instead of creating Trello cards directly, saves extracted tasks to pending_tasks table
+   */
+  async processEmailToPending(
+    userId: string,
+    messageId: string,
+    options?: {
+      processingOptions?: ProcessingOptions;
+    }
+  ): Promise<{
+    success: boolean;
+    tasksExtracted: number;
+    tasksSaved: number;
+    confidence: number;
+    issues?: string[];
+  }> {
+    const startTime = Date.now();
+
+    try {
+      logger.info(`Processing email ${messageId} to pending queue for user ${userId}`);
+
+      // Step 1: Fetch email from Gmail by its Gmail message ID
+      const emailMessage = await gmailService.getEmailById(userId, messageId);
+
+      if (!emailMessage) {
+        throw new Error(`Email ${messageId} not found`);
+      }
+
+      const email = gmailService.parseEmail(emailMessage);
+
+      // Step 2: Extract tasks using layered AI approach
+      const emailContent = this.formatEmailForAI(email);
+
+      const extraction = await aiService.processEmailWithValidation(
+        emailContent,
+        options?.processingOptions
+      );
+
+      logger.info(
+        `Extracted ${extraction.tasks.length} tasks with ${(extraction.confidence * 100).toFixed(1)}% confidence`
+      );
+
+      if (extraction.tasks.length === 0) {
+        return {
+          success: true,
+          tasksExtracted: 0,
+          tasksSaved: 0,
+          confidence: extraction.confidence,
+        };
+      }
+
+      // Step 3: Apply task intelligence (sorting, labeling, enrichment)
+      const enrichedTasks = extraction.tasks.map(task => taskIntelligenceService.enrichTask(task));
+      const sortedTasks = taskIntelligenceService.sortTasks(enrichedTasks);
+
+      // Step 4: Save tasks to pending_tasks table
+      const savedTasks: string[] = [];
+      const issues: string[] = [];
+
+      for (const task of sortedTasks) {
+        try {
+          // Ensure task has a valid title (fallback to description snippet or email subject)
+          const taskTitle = task.name || task.description?.substring(0, 100) || email.subject || 'Untitled Task';
+
+          const result = await db.query(
+            `INSERT INTO pending_tasks (
+              user_id, email_id, email_subject, email_from, email_date,
+              title, description, priority, category, due_date, estimated_time,
+              labels, confidence, extraction_source, status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'automation', 'pending')
+            RETURNING id`,
+            [
+              userId,
+              messageId,
+              email.subject,
+              email.from,
+              email.date,
+              taskTitle,
+              task.description || null,
+              task.priority || 'medium',
+              task.category || null,
+              task.dueDate || this.getDefaultDueDate(task.priority || 'medium'),
+              task.estimatedTime || null,
+              JSON.stringify(task.labels || []),
+              extraction.confidence,
+            ]
+          );
+
+          savedTasks.push(result.rows[0].id);
+          logger.info(`Saved pending task: ${taskTitle} (${result.rows[0].id})`);
+        } catch (error) {
+          const errorMsg = `Failed to save pending task: ${task.name}`;
+          logger.error(errorMsg, error);
+          issues.push(errorMsg);
+        }
+      }
+
+      const processingTime = Date.now() - startTime;
+
+      logger.info(
+        `Email processing to pending complete: ${savedTasks.length}/${extraction.tasks.length} tasks saved in ${processingTime}ms`
+      );
+
+      return {
+        success: savedTasks.length > 0,
+        tasksExtracted: extraction.tasks.length,
+        tasksSaved: savedTasks.length,
+        confidence: extraction.confidence,
+        issues: issues.length > 0 ? issues : undefined,
+      };
+    } catch (error) {
+      logger.error('Error processing email to pending:', error);
+      throw new Error('Failed to process email to pending queue');
+    }
+  }
+
+  /**
+   * Process multiple emails in batch to pending queue
+   */
+  async processEmailsToPending(
+    userId: string,
+    options?: {
+      maxEmails?: number;
+      query?: string;
+      labelIds?: string[];
+      processingOptions?: ProcessingOptions;
+    }
+  ): Promise<{
+    emailsProcessed: number;
+    totalTasksExtracted: number;
+    totalTasksSaved: number;
+    averageConfidence: number;
+    errors: string[];
+  }> {
+    try {
+      logger.info(`Starting batch email processing to pending for user ${userId}`);
+
+      // Fetch emails from Gmail
+      const emails = await gmailService.fetchEmails(userId, {
+        maxResults: options?.maxEmails || 10,
+        query: options?.query,
+        labelIds: options?.labelIds || ['INBOX'],
+      });
+
+      const results = {
+        emailsProcessed: 0,
+        totalTasksExtracted: 0,
+        totalTasksSaved: 0,
+        totalConfidence: 0,
+        errors: [] as string[],
+      };
+
+      // Process each email
+      for (const emailMessage of emails.messages) {
+        try {
+          const result = await this.processEmailToPending(
+            userId,
+            emailMessage.id,
+            {
+              processingOptions: options?.processingOptions,
+            }
+          );
+
+          results.emailsProcessed++;
+          results.totalTasksExtracted += result.tasksExtracted;
+          results.totalTasksSaved += result.tasksSaved;
+          results.totalConfidence += result.confidence;
+
+          if (result.issues) {
+            results.errors.push(...result.issues);
+          }
+        } catch (error) {
+          const errorMsg = `Failed to process email ${emailMessage.id}`;
+          logger.error(errorMsg, error);
+          results.errors.push(errorMsg);
+        }
+      }
+
+      return {
+        ...results,
+        averageConfidence:
+          results.emailsProcessed > 0
+            ? results.totalConfidence / results.emailsProcessed
+            : 0,
+      };
+    } catch (error) {
+      logger.error('Error in batch email processing to pending:', error);
+      throw new Error('Failed to process emails to pending queue');
     }
   }
 

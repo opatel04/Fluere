@@ -97,10 +97,12 @@ export const getTrelloStatus = asyncHandler(async (
     throw new ValidationError('User ID is required');
   }
 
-  const isConnected = await trelloService.isConnected(userId);
+  const status = await trelloService.getConnectionStatus(userId);
 
   successResponse(res, {
-    connected: isConnected,
+    connected: status.connected,
+    username: status.username,
+    fullName: status.fullName,
     service: 'trello',
   });
 });

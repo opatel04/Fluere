@@ -1,0 +1,1151 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: oklch(0.9821 0 0);
+    --foreground: oklch(0.3485 0 0);
+    --card: oklch(1.0000 0 0);
+    --card-foreground: oklch(0.3485 0 0);
+    --popover: oklch(1.0000 0 0);
+    --popover-foreground: oklch(0.3485 0 0);
+    --primary: oklch(0.4891 0 0);
+    --primary-foreground: oklch(0.9551 0 0);
+    --secondary: oklch(0.9006 0 0);
+    --secondary-foreground: oklch(0.3485 0 0);
+    --muted: oklch(0.9158 0 0);
+    --muted-foreground: oklch(0.4313 0 0);
+    --accent: oklch(0.9354 0.0456 94.8549);
+    --accent-foreground: oklch(0.4015 0.0436 37.9587);
+    --destructive: oklch(0.6627 0.0978 20.0041);
+    --destructive-foreground: oklch(1.0000 0 0);
+    --border: oklch(0.5538 0.0025 17.2320);
+    --input: oklch(1.0000 0 0);
+    --ring: oklch(0.7058 0 0);
+    --radius: 0.625rem;
+    --font-sans: var(--font-notebook), "Architects Daughter", sans-serif;
+    --font-serif: "Times New Roman", Times, serif;
+    --font-mono: "Courier New", Courier, monospace;
+  }
+
+  .dark {
+    --background: oklch(0.2891 0 0);
+    --foreground: oklch(0.8945 0 0);
+    --card: oklch(0.3211 0 0);
+    --card-foreground: oklch(0.8945 0 0);
+    --popover: oklch(0.3211 0 0);
+    --popover-foreground: oklch(0.8945 0 0);
+    --primary: oklch(0.7572 0 0);
+    --primary-foreground: oklch(0.2891 0 0);
+    --secondary: oklch(0.4676 0 0);
+    --secondary-foreground: oklch(0.8078 0 0);
+    --muted: oklch(0.3904 0 0);
+    --muted-foreground: oklch(0.7058 0 0);
+    --accent: oklch(0.9067 0 0);
+    --accent-foreground: oklch(0.3211 0 0);
+    --destructive: oklch(0.7915 0.0491 18.2410);
+    --destructive-foreground: oklch(1.0000 0 0);
+    --border: oklch(0.4276 0 0);
+    --input: oklch(0.3211 0 0);
+    --ring: oklch(0.8078 0 0);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Vercel-inspired Background Pattern */
+@layer utilities {
+  /* Scroll animations */
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-20px);
+    }
+  }
+
+  @keyframes gradient {
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
+  }
+
+  .animate-fade-in-up {
+    animation: fadeInUp 0.6s ease-out forwards;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.8s ease-out forwards;
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animate-gradient {
+    background-size: 200% 200%;
+    animation: gradient 8s ease infinite;
+  }
+
+  /* Scroll reveal */
+  .scroll-reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+  }
+
+  .scroll-reveal.revealed {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  /* Vercel-style subtle dotted grid - dark mode only */
+  .grid-pattern {
+    background-image: 
+      radial-gradient(circle, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 24px 24px;
+    background-position: 0 0;
+  }
+
+  /* Denser pattern for sidebar - dark mode only */
+  .grid-pattern-dense {
+    background-image: 
+      radial-gradient(circle, rgba(255, 255, 255, 0.04) 0.5px, transparent 0.5px);
+    background-size: 20px 20px;
+    background-position: 0 0;
+  }
+
+  /* Main elegant pattern - Vercel style - dark mode only */
+  .grid-pattern-elegant {
+    background-image: 
+      radial-gradient(circle, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 24px 24px;
+    background-position: 0 0;
+  }
+
+  /* Light mode creative pattern */
+  .light-pattern {
+    background-image: 
+      radial-gradient(circle at 20% 30%, rgba(99, 102, 241, 0.03) 0%, transparent 50%),
+      radial-gradient(circle at 80% 70%, rgba(168, 85, 247, 0.025) 0%, transparent 50%),
+      radial-gradient(circle at 50% 50%, rgba(236, 72, 153, 0.02) 0%, transparent 40%);
+    background-size: 400px 400px, 450px 450px, 350px 350px;
+    background-position: 0 0, 100% 100%, 50% 0;
+  }
+
+  /* Subtle decorative grid lines */
+  .decorative-grid {
+    background-image: 
+      linear-gradient(to right, rgba(148, 163, 184, 0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(148, 163, 184, 0.03) 1px, transparent 1px);
+    background-size: 48px 48px;
+    background-position: 0 0;
+  }
+
+  .dark .decorative-grid {
+    background-image: 
+      linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  }
+
+  /* Subtle corner accents */
+  .corner-accent {
+    position: relative;
+  }
+
+  .corner-accent::before,
+  .corner-accent::after {
+    content: '';
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    pointer-events: none;
+  }
+
+  .corner-accent::before {
+    top: 0;
+    left: 0;
+    border-right: none;
+    border-bottom: none;
+  }
+
+  .corner-accent::after {
+    bottom: 0;
+    right: 0;
+    border-left: none;
+    border-top: none;
+  }
+
+  .dark .corner-accent::before,
+  .dark .corner-accent::after {
+    border-color: rgba(255, 255, 255, 0.05);
+  }
+
+  /* Subtle diagonal lines */
+  .diagonal-lines {
+    background-image: 
+      repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 10px,
+        rgba(148, 163, 184, 0.02) 10px,
+        rgba(148, 163, 184, 0.02) 20px
+      );
+  }
+
+  .dark .diagonal-lines {
+    background-image: 
+      repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 10px,
+        rgba(255, 255, 255, 0.01) 10px,
+        rgba(255, 255, 255, 0.01) 20px
+      );
+  }
+
+  /* Subtle border decoration */
+  .border-decoration {
+    position: relative;
+  }
+
+  .border-decoration::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border: 1px solid transparent;
+    background: 
+      linear-gradient(white, white) padding-box,
+      linear-gradient(90deg, rgba(148, 163, 184, 0.1) 0%, transparent 50%, rgba(148, 163, 184, 0.1) 100%) border-box;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .border-decoration:hover::before {
+    opacity: 1;
+  }
+
+  .dark .border-decoration::before {
+    background: 
+      linear-gradient(black, black) padding-box,
+      linear-gradient(90deg, rgba(255, 255, 255, 0.05) 0%, transparent 50%, rgba(255, 255, 255, 0.05) 100%) border-box;
+  }
+
+  /* Subtle section dividers */
+  .section-divider {
+    position: relative;
+  }
+
+  .section-divider::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 1px;
+    height: 60px;
+    background: linear-gradient(to bottom, transparent, rgba(148, 163, 184, 0.1), transparent);
+  }
+
+  .dark .section-divider::before {
+    background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.05), transparent);
+  }
+
+  /* Subtle floating elements */
+  .floating-element {
+    position: absolute;
+    border-radius: 50%;
+    opacity: 0.03;
+    pointer-events: none;
+    animation: float 20s ease-in-out infinite;
+  }
+
+  .dark .floating-element {
+    opacity: 0.02;
+  }
+
+  /* Subtle text glow on hover */
+  .text-glow {
+    transition: text-shadow 0.3s ease;
+  }
+
+  .text-glow:hover {
+    text-shadow: 0 0 20px rgba(148, 163, 184, 0.1);
+  }
+
+  .dark .text-glow:hover {
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.05);
+  }
+
+  /* Subtle card shine effect */
+  .card-shine {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card-shine::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(
+      45deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.1) 50%,
+      transparent 70%
+    );
+    transform: rotate(45deg);
+    transition: transform 0.6s ease;
+    pointer-events: none;
+    opacity: 0;
+  }
+
+  .card-shine:hover::after {
+    opacity: 1;
+    transform: rotate(45deg) translate(100%, 100%);
+  }
+
+  .dark .card-shine::after {
+    background: linear-gradient(
+      45deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.05) 50%,
+      transparent 70%
+    );
+  }
+
+  /* Subtle pulse animation */
+  @keyframes subtlePulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.8;
+    }
+  }
+
+  .subtle-pulse {
+    animation: subtlePulse 3s ease-in-out infinite;
+  }
+
+  /* Unorganized to Organized Card Animations */
+  @keyframes organizeCard {
+    0% {
+      transform: translate(0, 0) rotate(-15deg) scale(0.9);
+      opacity: 0.3;
+    }
+    30% {
+      transform: translate(50px, -30px) rotate(-8deg) scale(0.95);
+      opacity: 0.4;
+    }
+    60% {
+      transform: translate(100px, -50px) rotate(-3deg) scale(0.98);
+      opacity: 0.5;
+    }
+    100% {
+      transform: translate(150px, -60px) rotate(0deg) scale(1);
+      opacity: 0.6;
+    }
+  }
+
+
+  @keyframes cardAlign {
+    0% {
+      transform: translateX(0) translateY(0) rotate(-12deg);
+      opacity: 0.3;
+    }
+    50% {
+      transform: translateX(80px) translateY(-40px) rotate(-6deg);
+      opacity: 0.5;
+    }
+    100% {
+      transform: translateX(160px) translateY(-80px) rotate(0deg);
+      opacity: 0.6;
+    }
+  }
+
+  @keyframes cardStack {
+    0% {
+      transform: translateY(0) translateX(0) rotate(-8deg);
+      opacity: 0.3;
+    }
+    50% {
+      transform: translateY(-30px) translateX(20px) rotate(-4deg);
+      opacity: 0.5;
+    }
+    100% {
+      transform: translateY(-60px) translateX(40px) rotate(0deg);
+      opacity: 0.6;
+    }
+  }
+
+  @keyframes chatBubble {
+    0% {
+      opacity: 0;
+      transform: scale(0) translateY(10px);
+    }
+    20% {
+      opacity: 0.3;
+      transform: scale(1) translateY(0);
+    }
+    80% {
+      opacity: 0.3;
+      transform: scale(1) translateY(0);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(0.8) translateY(-10px);
+    }
+  }
+
+  @keyframes aiSparkle {
+    0%, 100% {
+      opacity: 0;
+      transform: scale(0) rotate(0deg);
+    }
+    50% {
+      opacity: 0.4;
+      transform: scale(1) rotate(180deg);
+    }
+  }
+
+  @keyframes connectionFlow {
+    0% {
+      stroke-dashoffset: 1000;
+      opacity: 0;
+    }
+    20% {
+      opacity: 0.2;
+    }
+    80% {
+      opacity: 0.2;
+    }
+    100% {
+      stroke-dashoffset: 0;
+      opacity: 0;
+    }
+  }
+
+  @keyframes patternShift {
+    0% {
+      background-position: 0 0;
+    }
+    100% {
+      background-position: 40px 40px;
+    }
+  }
+
+  /* Unorganized Cards (Scattered) */
+  .unorganized-cards {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .unorganized-cards > div {
+    position: absolute;
+    width: 70px;
+    height: 90px;
+    border-radius: 6px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.1);
+  }
+
+  .scatter-card-1 {
+    animation: scatterToOrganize1 20s ease-in-out infinite;
+  }
+
+  .scatter-card-2 {
+    animation: scatterToOrganize2 20s ease-in-out infinite;
+  }
+
+  .scatter-card-3 {
+    animation: scatterToOrganize3 20s ease-in-out infinite;
+  }
+
+  @keyframes scatterToOrganize1 {
+    0% {
+      transform: translate(-80px, 60px) rotate(-25deg) scale(0.8);
+      opacity: 0.2;
+    }
+    40% {
+      transform: translate(-40px, 30px) rotate(-12deg) scale(0.9);
+      opacity: 0.4;
+    }
+    70% {
+      transform: translate(-16px, 12px) rotate(-5deg) scale(0.95);
+      opacity: 0.5;
+    }
+    100% {
+      transform: translate(0, 0) rotate(0deg) scale(1);
+      opacity: 0.6;
+    }
+  }
+
+  @keyframes scatterToOrganize2 {
+    0% {
+      transform: translate(100px, -70px) rotate(18deg) scale(0.8);
+      opacity: 0.2;
+    }
+    40% {
+      transform: translate(50px, -35px) rotate(9deg) scale(0.9);
+      opacity: 0.4;
+    }
+    70% {
+      transform: translate(20px, -14px) rotate(3deg) scale(0.95);
+      opacity: 0.5;
+    }
+    100% {
+      transform: translate(0, 0) rotate(0deg) scale(1);
+      opacity: 0.6;
+    }
+  }
+
+  @keyframes scatterToOrganize3 {
+    0% {
+      transform: translate(-60px, -50px) rotate(-15deg) scale(0.8);
+      opacity: 0.2;
+    }
+    40% {
+      transform: translate(-30px, -25px) rotate(-7deg) scale(0.9);
+      opacity: 0.4;
+    }
+    70% {
+      transform: translate(-12px, -10px) rotate(-3deg) scale(0.95);
+      opacity: 0.5;
+    }
+    100% {
+      transform: translate(0, 0) rotate(0deg) scale(1);
+      opacity: 0.6;
+    }
+  }
+
+  .dark .unorganized-cards > div {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.15);
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.05);
+  }
+
+  /* Organized Cards (Aligned) */
+  .organized-cards {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .organized-cards > div {
+    position: absolute;
+    width: 80px;
+    height: 100px;
+    border-radius: 6px;
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+    animation: cardAlign 18s ease-in-out infinite;
+  }
+
+  .dark .organized-cards > div {
+    background: rgba(59, 130, 246, 0.08);
+    border-color: rgba(59, 130, 246, 0.15);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.05);
+  }
+
+  /* Card Stack Animation */
+  .card-stack {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .card-stack > div {
+    position: absolute;
+    width: 75px;
+    height: 95px;
+    border-radius: 6px;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    box-shadow: 0 3px 10px rgba(59, 130, 246, 0.1);
+    animation: cardStack 16s ease-in-out infinite;
+  }
+
+  .dark .card-stack > div {
+    background: rgba(59, 130, 246, 0.05);
+    border-color: rgba(59, 130, 246, 0.15);
+    box-shadow: 0 3px 10px rgba(59, 130, 246, 0.05);
+  }
+
+  /* Particle Morphing Animation - Inspired by Slack's "Communication Without Chaos" */
+  @keyframes particleScatter {
+    0% {
+      opacity: 0.4;
+      transform: translate(0, 0) rotate(0deg);
+    }
+    25% {
+      opacity: 0.7;
+      transform: translate(calc(var(--x) * 0.3), calc(var(--y) * 0.3)) rotate(5deg);
+    }
+    50% {
+      opacity: 0.5;
+      transform: translate(calc(var(--x) * 0.5), calc(var(--y) * 0.5)) rotate(-3deg);
+    }
+    75% {
+      opacity: 0.8;
+      transform: translate(calc(var(--x) * 0.2), calc(var(--y) * 0.2)) rotate(2deg);
+    }
+    100% {
+      opacity: 0.4;
+      transform: translate(0, 0) rotate(0deg);
+    }
+  }
+
+  @keyframes morphPath {
+    0% {
+      stroke-dashoffset: 1000;
+      opacity: 0;
+    }
+    20% {
+      opacity: 0.4;
+    }
+    50% {
+      stroke-dashoffset: 500;
+      opacity: 0.6;
+    }
+    80% {
+      opacity: 0.4;
+    }
+    100% {
+      stroke-dashoffset: 0;
+      opacity: 0;
+    }
+  }
+
+  @keyframes flowDotMove {
+    0% {
+      opacity: 0;
+    }
+    10% {
+      opacity: 0.8;
+    }
+    90% {
+      opacity: 0.8;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+
+  @keyframes cardMaterialize {
+    0% {
+      opacity: 0.6;
+      transform: scale(0.95) translateY(10px);
+      filter: blur(4px);
+    }
+    50% {
+      opacity: 0.8;
+      transform: scale(0.98) translateY(5px);
+      filter: blur(2px);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+      filter: blur(0);
+    }
+  }
+
+  @keyframes shineWave {
+    0% {
+      transform: translateX(-100%) skewX(-15deg);
+    }
+    100% {
+      transform: translateX(200%) skewX(-15deg);
+    }
+  }
+
+  /* Container */
+  .particle-morph-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Scattered Particles */
+  .scattered-particles {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 25%;
+    height: 100%;
+  }
+
+  .particle-text {
+    position: absolute;
+    font-size: 14px;
+    font-weight: 500;
+    color: rgba(239, 68, 68, 0.8);
+    padding: 6px 12px;
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 6px;
+    white-space: nowrap;
+    animation: particleScatter 4s ease-in-out infinite;
+  }
+
+  .dark .particle-text {
+    color: rgba(239, 68, 68, 0.7);
+    background: rgba(239, 68, 68, 0.05);
+    border-color: rgba(239, 68, 68, 0.15);
+  }
+
+  /* Morphing SVG */
+  .morph-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: visible;
+  }
+
+  .morph-path {
+    stroke: url(#flowGradient);
+    stroke-width: 2;
+    fill: none;
+    stroke-dasharray: 1000;
+    stroke-dashoffset: 1000;
+    animation: morphPath 5s ease-in-out infinite;
+    stroke-linecap: round;
+  }
+
+  .morph-path-1 { animation-delay: 0s; }
+  .morph-path-2 { animation-delay: 0.3s; }
+  .morph-path-3 { animation-delay: 0.6s; }
+  .morph-path-4 { animation-delay: 0.9s; }
+  .morph-path-5 { animation-delay: 1.2s; }
+
+  /* Flow Dots */
+  .flow-dot {
+    fill: rgba(59, 130, 246, 0.7);
+    animation: flowDotMove 5s ease-in-out infinite;
+  }
+
+  .dark .flow-dot {
+    fill: rgba(59, 130, 246, 0.6);
+  }
+
+  .flow-dot-1 {
+    animation-delay: 0.2s;
+    offset-path: path('M 100 120 Q 250 100, 400 150 T 650 200');
+    offset-distance: 0%;
+    animation-name: flowDotMove, dotPath1;
+  }
+
+  .flow-dot-2 {
+    animation-delay: 0.5s;
+    offset-path: path('M 80 210 Q 220 240, 400 220 T 650 250');
+    offset-distance: 0%;
+    animation-name: flowDotMove, dotPath2;
+  }
+
+  .flow-dot-3 {
+    animation-delay: 0.8s;
+    offset-path: path('M 120 300 Q 280 280, 400 310 T 650 320');
+    offset-distance: 0%;
+    animation-name: flowDotMove, dotPath3;
+  }
+
+  .flow-dot-4 {
+    animation-delay: 1.1s;
+    offset-path: path('M 90 410 Q 240 430, 400 400 T 650 380');
+    offset-distance: 0%;
+    animation-name: flowDotMove, dotPath4;
+  }
+
+  .flow-dot-5 {
+    animation-delay: 1.4s;
+    offset-path: path('M 100 450 Q 260 480, 400 460 T 650 440');
+    offset-distance: 0%;
+    animation-name: flowDotMove, dotPath5;
+  }
+
+  @keyframes dotPath1 {
+    0% { offset-distance: 0%; }
+    100% { offset-distance: 100%; }
+  }
+
+  @keyframes dotPath2 {
+    0% { offset-distance: 0%; }
+    100% { offset-distance: 100%; }
+  }
+
+  @keyframes dotPath3 {
+    0% { offset-distance: 0%; }
+    100% { offset-distance: 100%; }
+  }
+
+  @keyframes dotPath4 {
+    0% { offset-distance: 0%; }
+    100% { offset-distance: 100%; }
+  }
+
+  @keyframes dotPath5 {
+    0% { offset-distance: 0%; }
+    100% { offset-distance: 100%; }
+  }
+
+  /* Organized Card */
+  .organized-card-final {
+    position: absolute;
+    right: 5%;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 320px;
+    background: rgba(59, 130, 246, 0.06);
+    border: 2px solid rgba(59, 130, 246, 0.2);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 
+      0 4px 12px rgba(59, 130, 246, 0.08),
+      0 16px 48px rgba(59, 130, 246, 0.12);
+    animation: cardMaterialize 3s ease-in-out infinite;
+    overflow: hidden;
+    backdrop-filter: blur(8px);
+  }
+
+  .dark .organized-card-final {
+    background: rgba(59, 130, 246, 0.04);
+    border-color: rgba(59, 130, 246, 0.15);
+    box-shadow: 
+      0 4px 12px rgba(59, 130, 246, 0.05),
+      0 16px 48px rgba(59, 130, 246, 0.08);
+  }
+
+  .card-shine-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      110deg,
+      transparent 30%,
+      rgba(59, 130, 246, 0.15) 50%,
+      transparent 70%
+    );
+    animation: shineWave 3s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  .card-header-final {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .card-title-final {
+    font-size: 20px;
+    font-weight: 700;
+    color: rgba(59, 130, 246, 0.95);
+    letter-spacing: -0.02em;
+  }
+
+  .dark .card-title-final {
+    color: rgba(59, 130, 246, 0.85);
+  }
+
+  .card-badge-final {
+    padding: 4px 12px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    color: rgba(239, 68, 68, 0.95);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .dark .card-badge-final {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.2);
+    color: rgba(239, 68, 68, 0.85);
+  }
+
+  .card-divider {
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      rgba(59, 130, 246, 0.2),
+      transparent
+    );
+    margin-bottom: 16px;
+  }
+
+  .dark .card-divider {
+    background: linear-gradient(
+      to right,
+      transparent,
+      rgba(59, 130, 246, 0.15),
+      transparent
+    );
+  }
+
+  .card-body-final {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .card-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+  }
+
+  .card-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(100, 116, 139, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .dark .card-label {
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  .card-value {
+    font-size: 15px;
+    font-weight: 600;
+    color: rgba(30, 41, 59, 0.95);
+  }
+
+  .dark .card-value {
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+  }
+
+  .dark .card-header {
+    border-bottom-color: rgba(59, 130, 246, 0.15);
+  }
+
+  .card-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: rgba(59, 130, 246, 0.9);
+  }
+
+  .dark .card-title {
+    color: rgba(59, 130, 246, 0.8);
+  }
+
+  .card-badge {
+    padding: 4px 10px;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(239, 68, 68, 0.9);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .dark .card-badge {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.2);
+    color: rgba(239, 68, 68, 0.8);
+  }
+
+  .card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .card-detail {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+  }
+
+  .detail-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(100, 116, 139, 0.8);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .dark .detail-label {
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .detail-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(30, 41, 59, 0.9);
+  }
+
+  .dark .detail-value {
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  /* AI Chat Bubbles */
+  .ai-chat-bubbles {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .ai-chat-bubbles > div {
+    position: absolute;
+    width: 50px;
+    height: 50px;
+    border-radius: 50% 50% 50% 0;
+    background: rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    animation: chatBubble 8s ease-in-out infinite;
+  }
+
+  .dark .ai-chat-bubbles > div {
+    background: rgba(139, 92, 246, 0.08);
+    border-color: rgba(139, 92, 246, 0.15);
+  }
+
+  /* AI Sparkles */
+  .ai-sparkles {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .ai-sparkles > div {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(139, 92, 246, 0.4);
+    animation: aiSparkle 4s ease-in-out infinite;
+  }
+
+  .dark .ai-sparkles > div {
+    background: rgba(139, 92, 246, 0.3);
+  }
+
+  /* Connection Lines (Integration Flow) */
+  .connection-lines {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+  }
+
+  .connection-lines svg {
+    width: 100%;
+    height: 100%;
+    opacity: 0.15;
+  }
+
+  .connection-lines path {
+    stroke: rgba(59, 130, 246, 0.2);
+    stroke-width: 1;
+    stroke-dasharray: 1000;
+    fill: none;
+    animation: connectionFlow 30s linear infinite;
+  }
+
+  .dark .connection-lines path {
+    stroke: rgba(255, 255, 255, 0.08);
+  }
+
+  /* Subtle animated pattern */
+  .animated-pattern {
+    background-image: 
+      radial-gradient(circle, rgba(59, 130, 246, 0.06) 1px, transparent 1px);
+    background-size: 40px 40px;
+    animation: patternShift 30s linear infinite;
+  }
+
+  .dark .animated-pattern {
+    background-image: 
+      radial-gradient(circle, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  }
+
+  /* Elegant card hover effect */
+  .elegant-hover {
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .elegant-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.1);
+  }
+
+  .dark .elegant-hover:hover {
+    box-shadow: 0 20px 40px -12px rgba(255, 255, 255, 0.05);
+  }
+}
+

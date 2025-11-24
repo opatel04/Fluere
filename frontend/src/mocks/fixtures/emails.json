@@ -1,0 +1,27 @@
+[
+  {
+    "id": "e_1",
+    "client_id": "c_1",
+    "from": "john@ex.com",
+    "to": ["me@tasksnap.com"],
+    "subject": "Request for quote",
+    "preview": "Hi — can you send pricing for ...",
+    "body_html": "<p>Full HTML body</p>",
+    "timestamp": "2025-11-03T12:00:00Z",
+    "has_tasks": true,
+    "processed": false
+  },
+  {
+    "id": "e_2",
+    "client_id": "c_2",
+    "from": "contact@techstart.com",
+    "to": ["me@tasksnap.com"],
+    "subject": "Meeting request",
+    "preview": "Would like to schedule a call to discuss...",
+    "body_html": "<p>Meeting request details</p>",
+    "timestamp": "2025-11-02T10:00:00Z",
+    "has_tasks": true,
+    "processed": false
+  }
+]
+

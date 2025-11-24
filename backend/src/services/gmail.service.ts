@@ -112,6 +112,76 @@ class GmailService {
   }
 
   /**
+   * Create or update user from Gmail OAuth and save tokens
+   */
+  async createOrUpdateUser(userId: string | undefined, tokens: GmailTokens): Promise<{ userId: string; email: string; name: string }> {
+    try {
+      const { access_token, refresh_token, expiry_date } = tokens;
+      const { v4: uuidv4 } = await import('uuid');
+
+      // Get user email from Google
+      const userInfo = await this.getUserInfo(access_token);
+
+      let finalUserId = userId;
+
+      // If no userId provided, check if user exists by email or create new user
+      if (!finalUserId) {
+        const existingUser = await query(
+          `SELECT id FROM users WHERE email = $1`,
+          [userInfo.email]
+        );
+
+        if (existingUser.rows.length > 0) {
+          finalUserId = existingUser.rows[0].id;
+        } else {
+          // Create new user
+          const newUser = await query(
+            `INSERT INTO users (id, email, created_at, updated_at)
+             VALUES ($1, $2, NOW(), NOW())
+             RETURNING id`,
+            [uuidv4(), userInfo.email]
+          );
+          finalUserId = newUser.rows[0].id;
+          logger.info(`Created new user ${finalUserId} from Gmail OAuth`);
+        }
+      }
+
+      // Save Gmail tokens
+      await query(
+        `INSERT INTO gmail_tokens (user_id, access_token, refresh_token, expires_at, email, scopes)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (user_id)
+         DO UPDATE SET
+           access_token = $2,
+           refresh_token = COALESCE($3, gmail_tokens.refresh_token),
+           expires_at = $4,
+           email = $5,
+           scopes = $6,
+           updated_at = NOW()`,
+        [
+          finalUserId,
+          access_token,
+          refresh_token || null,
+          new Date(expiry_date),
+          userInfo.email,
+          tokens.scope,
+        ]
+      );
+
+      logger.info(`Saved Gmail tokens for user ${finalUserId}`);
+
+      return {
+        userId: finalUserId!,
+        email: userInfo.email,
+        name: userInfo.name,
+      };
+    } catch (error) {
+      logger.error('Error creating/updating user:', error);
+      throw new Error('Failed to save Gmail tokens');
+    }
+  }
+
+  /**
    * Save Gmail tokens to database
    */
   async saveTokens(userId: string, tokens: GmailTokens): Promise<void> {
@@ -152,7 +222,7 @@ class GmailService {
   /**
    * Get user info from Google
    */
-  private async getUserInfo(accessToken: string): Promise<{ email: string; name: string }> {
+  async getUserInfo(accessToken: string): Promise<{ email: string; name: string }> {
     try {
       this.oauth2Client.setCredentials({ access_token: accessToken });
       const oauth2 = google.oauth2({ version: 'v2', auth: this.oauth2Client });
@@ -508,6 +578,31 @@ class GmailService {
     } catch (error) {
       logger.error('Error unsubscribing from Gmail notifications:', error);
       throw new Error('Failed to unsubscribe from Gmail notifications');
+    }
+  }
+
+  /**
+   * Get a single email by its Gmail message ID
+   */
+  async getEmailById(userId: string, messageId: string): Promise<EmailMessage | null> {
+    try {
+      const gmail = await this.getGmailClient(userId);
+
+      const response = await gmail.users.messages.get({
+        userId: 'me',
+        id: messageId,
+        format: 'full',
+      });
+
+      logger.info(`Fetched email ${messageId} for user ${userId}`);
+      return response.data as EmailMessage;
+    } catch (error: any) {
+      if (error.code === 404) {
+        logger.warn(`Email ${messageId} not found for user ${userId}`);
+        return null;
+      }
+      logger.error('Error fetching email by ID:', error);
+      throw new Error('Failed to fetch email from Gmail');
     }
   }
 

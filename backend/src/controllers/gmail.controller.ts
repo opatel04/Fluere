@@ -18,13 +18,8 @@ export const connectGmail = asyncHandler(async (
   req: Request,
   res: Response
 ): Promise<void> => {
-  // In production, get userId from authenticated session
-  // For now, we'll use a query parameter or generate a temp ID
-  const userId = req.query.userId as string || (req as any).session?.userId || 'temp_user_id';
-
-  if (!userId) {
-    throw new ValidationError('User ID is required');
-  }
+  // userId is optional - if not provided, will be created from Gmail OAuth
+  const userId = req.query.userId as string || (req as any).session?.userId || 'new';
 
   const authUrl = gmailService.getAuthUrl(userId);
 
@@ -57,22 +52,17 @@ export const gmailCallback = asyncHandler(async (
     return;
   }
 
-  // State contains the user ID
+  // State contains the user ID (optional - will be created if not provided)
   const userId = state as string;
 
-  if (!userId) {
-    res.redirect('/oauth-dashboard.html?gmail=error&message=Invalid%20state%20parameter');
-    return;
-  }
-
   // Exchange code for tokens and save to database
-  // Note: If this fails, asyncHandler will catch and the error handler will respond with JSON
-  // In a production OAuth flow, you might want a custom error handler that redirects
+  // This will auto-create user if userId is not provided
   const tokens = await gmailService.getTokensFromCode(code);
-  await gmailService.saveTokens(userId, tokens);
+  const userInfo = await gmailService.createOrUpdateUser(userId, tokens);
 
-  // Redirect back to OAuth dashboard with success
-  res.redirect('/oauth-dashboard.html?gmail=success');
+  // Redirect back to frontend with success
+  const redirectUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+  res.redirect(`${redirectUrl}/settings?gmail=success&userId=${userInfo.userId}`);
 });
 
 /**
@@ -121,6 +111,12 @@ export const getGmailStatus = asyncHandler(async (
 /**
  * Fetch emails from Gmail
  * GET /api/v1/emails/fetch
+ *
+ * Query params:
+ * - filter: 'important' | 'primary' | 'all' (default: 'primary')
+ *   - 'important': Only emails marked as important
+ *   - 'primary': Primary inbox only (excludes Promotions, Social, Updates)
+ *   - 'all': All emails including promotions
  */
 export const fetchEmails = asyncHandler(async (
   req: Request,
@@ -133,15 +129,40 @@ export const fetchEmails = asyncHandler(async (
   }
 
   const maxResults = parseInt(req.query.maxResults as string) || 10;
-  const query = req.query.query as string;
+  const customQuery = req.query.query as string;
+  const filter = (req.query.filter as string) || 'primary';
   const labelIds = req.query.labelIds
     ? (req.query.labelIds as string).split(',')
     : undefined;
   const pageToken = req.query.pageToken as string;
 
+  // Build search query based on filter
+  let searchQuery = '';
+  switch (filter) {
+    case 'important':
+      // Only emails marked as important
+      searchQuery = 'is:important';
+      break;
+    case 'primary':
+      // Primary inbox - excludes Promotions, Social, Updates, Forums
+      searchQuery = 'category:primary';
+      break;
+    case 'all':
+      // No filter - fetch all emails
+      searchQuery = '';
+      break;
+    default:
+      searchQuery = 'category:primary';
+  }
+
+  // Append custom query if provided
+  if (customQuery) {
+    searchQuery = searchQuery ? `${searchQuery} ${customQuery}` : customQuery;
+  }
+
   const result = await gmailService.fetchEmails(userId, {
     maxResults,
-    query,
+    query: searchQuery || undefined,
     labelIds,
     pageToken,
   });
@@ -155,6 +176,7 @@ export const fetchEmails = asyncHandler(async (
     emails: parsedEmails,
     nextPageToken: result.nextPageToken,
     count: parsedEmails.length,
+    filter: filter,
   });
 });
 

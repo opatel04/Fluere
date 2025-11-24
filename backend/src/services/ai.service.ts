@@ -308,15 +308,30 @@ Respond with JSON:
 
     return `You are an expert at extracting actionable tasks from emails.
 
-Extract all actionable items, to-dos, requests, and tasks from the email.
+Extract all actionable items, to-dos, requests, deadlines, and tasks from the email.
+
+IMPORTANT - These are ALL considered actionable items that should become tasks:
+- Payment due dates (bills, credit cards, loans, subscriptions)
+- Deadlines and due dates of any kind
+- Appointments, meetings, events to attend
+- Requests or asks from the sender
+- Follow-ups needed
+- Documents to review or sign
+- Renewals (subscriptions, licenses, memberships)
+- Reminders about upcoming obligations
+- Any time-sensitive notifications
 
 For each task, determine:
-- name: Clear, concise task name
-- description: Detailed description with context
+- title: Clear, actionable task title (e.g., "Pay Chase credit card - $1,896.75")
+- description: Detailed description with context including amounts, account info, etc.
 - priority: low, medium, high, or urgent
+  * urgent: Due within 3 days or overdue
+  * high: Due within 7 days
+  * medium: Due within 30 days
+  * low: No specific deadline or far future
 - dueDate: ISO 8601 date if mentioned (e.g., "2025-01-15")
-- category: Type of task (e.g., "meeting", "code review", "documentation")
-- labels: Relevant tags
+- category: Type of task (e.g., "payment", "meeting", "review", "renewal", "deadline")
+- labels: Relevant tags (e.g., ["financial", "urgent"], ["work", "meeting"])
 - assignee: Person responsible (if mentioned)
 - estimatedTime: Time estimate if mentioned
 
@@ -324,7 +339,7 @@ Respond with JSON:
 {
   "tasks": [
     {
-      "name": string,
+      "title": string,
       "description": string,
       "priority": "low" | "medium" | "high" | "urgent",
       "dueDate": string (optional),
@@ -345,11 +360,13 @@ Respond with JSON:
 }
 
 Rules:
-- Extract ALL actionable items, even small ones
-- Infer priority from urgency language
+- Extract ALL actionable items including financial obligations, deadlines, and reminders
+- Payment due = always create a task with the amount and due date
+- Infer priority from due date proximity and urgency language
 - Parse dates in any format to ISO 8601
-- If no tasks found, return empty array
-- Be thorough but precise${focusNote}`;
+- Include specific amounts, account numbers (last 4 digits), and key details in task name/description
+- If the email contains ANY deadline or due date, create a task for it
+- Be thorough - it's better to extract too many tasks than miss important ones${focusNote}`;
   }
 
   /**

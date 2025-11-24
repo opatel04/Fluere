@@ -1,0 +1,683 @@
+================================================================================
+  TASKSNAP BACKEND API - FRONTEND INTEGRATION GUIDE
+================================================================================
+
+Last Updated: January 2025
+Version: v1 (Old Deployment - Pre-Cleanup)
+
+================================================================================
+1. DEPLOYMENT INFORMATION
+================================================================================
+
+🚀 PRODUCTION BACKEND (Railway)
+-------------------------------
+Base URL:           https://tasksnap-v2-production.up.railway.app
+API Base URL:       https://tasksnap-v2-production.up.railway.app/api/v1
+
+⚠️  IMPORTANT NOTES:
+- The root path (/) works and returns: {"success":true,"message":"Welcome to TaskSnap API"}
+- The /api/v1 path alone returns 404 (this is NORMAL - you need to use specific endpoints)
+- Use full endpoint paths like /api/v1/clients, /api/v1/tasks, etc.
+
+Health Check:
+GET https://tasksnap-v2-production.up.railway.app/health
+Response: {
+  "success": true,
+  "message": "TaskSnap API is running",
+  "timestamp": "2025-01-06T...",
+  "environment": "production"
+}
+
+================================================================================
+2. RESPONSE FORMAT
+================================================================================
+
+All API responses follow this consistent structure:
+
+✅ SUCCESS Response:
+{
+  "success": true,
+  "data": {
+    // Resource-specific data (see endpoint details below)
+  },
+  "message": "Optional success message",
+  "count": 10  // Optional: for list endpoints
+}
+
+❌ ERROR Response:
+{
+  "success": false,
+  "error": {
+    "message": "Error description",
+    "details": {}  // Optional additional error details
+  }
+}
+
+================================================================================
+3. AUTHENTICATION
+================================================================================
+
+Most endpoints require JWT authentication:
+
+Headers Required:
+  Authorization: Bearer <jwt_token>
+  Content-Type: application/json
+
+How to get JWT Token:
+- Currently using temporary userId approach (see OAuth init endpoint)
+- Full JWT implementation in progress
+
+Endpoints WITHOUT Authentication:
+- GET  /health
+- GET  /
+- POST /api/v1/auth/init-temp-user
+- Gmail/Trello OAuth callbacks
+
+Endpoints WITH Authentication:
+- ALL /api/v1/clients/* endpoints
+- Most /api/v1/emails/* endpoints
+- Future /api/v1/tasks/* endpoints (when implemented)
+
+================================================================================
+4. AVAILABLE ENDPOINTS
+================================================================================
+
+--------------------------------------------------------------------------------
+4.1 CLIENT MANAGEMENT (✅ FULLY IMPLEMENTED)
+--------------------------------------------------------------------------------
+Base Path: /api/v1/clients
+
+All client endpoints require authentication.
+
+1. List All Clients
+   GET /api/v1/clients
+   Query Params (all optional):
+     - status: 'active' | 'at_risk' | 'churned'
+     - minHealthScore: number (0-100)
+     - maxHealthScore: number (0-100)
+     - searchQuery: string
+     - sortBy: 'name' | 'last_contact' | 'health_score' | 'email_count'
+     - sortOrder: 'asc' | 'desc'
+
+   Response:
+   {
+     "success": true,
+     "data": {
+       "clients": [
+         {
+           "id": "uuid",
+           "userId": "uuid",
+           "email": "client@example.com",
+           "name": "Client Name",
+           "company": "Company Name",
+           "phone": "+1234567890",
+           "emailCount": 25,
+           "firstContactDate": "2025-01-01T00:00:00Z",
+           "lastContactDate": "2025-01-06T00:00:00Z",
+           "status": "active",
+           "healthScore": 85,
+           "healthUpdatedAt": "2025-01-06T00:00:00Z",
+           "notes": "VIP client",
+           "metadata": {},
+           "createdAt": "2025-01-01T00:00:00Z",
+           "updatedAt": "2025-01-06T00:00:00Z"
+         }
+       ]
+     },
+     "count": 10
+   }
+
+2. Get Client by ID
+   GET /api/v1/clients/:id
+
+   Response:
+   {
+     "success": true,
+     "data": {
+       "client": { /* Same client object as above */ }
+     }
+   }
+
+3. Create Client
+   POST /api/v1/clients
+   Body:
+   {
+     "email": "newclient@example.com",
+     "name": "Client Name",  // optional
+     "company": "Company",   // optional
+     "phone": "+1234567890", // optional
+     "notes": "Notes"        // optional
+   }
+
+   Response:
+   {
+     "success": true,
+     "data": {
+       "client": { /* Client object */ }
+     }
+   }
+
+4. Update Client
+   PUT /api/v1/clients/:id
+   Body: (all fields optional)
+   {
+     "name": "Updated Name",
+     "company": "Updated Company",
+     "phone": "+1234567890",
+     "notes": "Updated notes",
+     "status": "active" | "at_risk" | "churned"
+   }
+
+   Response:
+   {
+     "success": true,
+     "data": {
+       "client": { /* Updated client object */ }
+     }
+   }
+
+5. Archive Client (Soft Delete)
+   DELETE /api/v1/clients/:id
+
+   Response:
+   {
+     "success": true,
+     "message": "Client archived successfully"
+   }
+
+6. Get At-Risk Clients
+   GET /api/v1/clients/at-risk
+
+   Response:
+   {
+     "success": true,
+     "data": {
+       "clients": [ /* Array of at-risk clients */ ]
+     },
+     "count": 3
+   }
+
+7. Get Client Tasks
+   GET /api/v1/clients/:id/tasks
+
+   Response:
+   {
+     "success": true,
+     "data": {
+       "tasks": [ /* Array of tasks for this client */ ]
+     }
+   }
+
+8. Get Client Emails
+   GET /api/v1/clients/:id/emails
+
+   Response:
+   {
+     "success": true,
+     "data": {
+       "emails": [ /* Array of emails for this client */ ]
+     }
+   }
+
+9. Get Client Timeline
+   GET /api/v1/clients/:id/timeline
+
+   Response:
+   {
+     "success": true,
+     "data": {
+       "timeline": [ /* Array of activity events */ ]
+     }
+   }
+
+10. Get Client Statistics
+    GET /api/v1/clients/:id/stats
+
+    Response:
+    {
+      "success": true,
+      "data": {
+        "stats": {
+          "overview": {
+            "totalTasks": 50,
+            "completedTasks": 30,
+            "overdueTasks": 5,
+            "pendingTasks": 15,
+            "totalEmails": 100,
+            "healthScore": 85
+          },
+          "communication": {
+            "avgResponseTime": 2.5,  // hours
+            "lastContactDate": "2025-01-06T00:00:00Z",
+            "emailFrequency": 5,  // emails per week
+            "sentimentTrend": [
+              { "date": "2025-01-01T00:00:00Z", "score": 0.8 }
+            ]
+          },
+          "tasks": {
+            "upcomingDeadlines": [],
+            "tasksByStatus": {
+              "pending": 15,
+              "completed": 30,
+              "overdue": 5
+            },
+            "completionRate": 0.75
+          }
+        }
+      }
+    }
+
+11. Update Client Health Score
+    POST /api/v1/clients/:id/health
+    Body: (optional - will auto-calculate if not provided)
+    {
+      "healthScore": 75
+    }
+
+    Response:
+    {
+      "success": true,
+      "data": {
+        "client": { /* Updated client with new health score */ }
+      }
+    }
+
+--------------------------------------------------------------------------------
+4.2 TASKS (⚠️  STUB IMPLEMENTATION - NOT FULLY WORKING)
+--------------------------------------------------------------------------------
+Base Path: /api/v1/tasks
+
+⚠️  WARNING: These endpoints currently return placeholder messages.
+They are NOT connected to real functionality yet.
+
+Planned endpoints:
+- GET    /api/v1/tasks
+- GET    /api/v1/tasks/:id
+- POST   /api/v1/tasks
+- PUT    /api/v1/tasks/:id
+- DELETE /api/v1/tasks/:id
+- POST   /api/v1/tasks/bulk/create
+
+Current Response (all endpoints):
+{
+  "message": "Create/List/Get/Update/Delete task endpoint - to be implemented"
+}
+
+--------------------------------------------------------------------------------
+4.3 EMAILS (⚠️  PARTIAL IMPLEMENTATION)
+--------------------------------------------------------------------------------
+Base Path: /api/v1/emails
+
+Working Endpoints:
+
+1. Fetch Emails from Gmail
+   GET /api/v1/emails/fetch
+   Query Params:
+     - maxResults: number (default: 10)
+
+   Response:
+   {
+     "success": true,
+     "data": {
+       "emails": [ /* Array of Gmail messages */ ]
+     }
+   }
+
+2. Get Inbound Email by ID (requires auth)
+   GET /api/v1/emails/inbound/:id
+
+   Response:
+   {
+     "success": true,
+     "data": {
+       "email": { /* Inbound email object */ }
+     }
+   }
+
+3. List All Inbound Emails (requires auth)
+   GET /api/v1/emails/inbound
+   Query Params:
+     - client_id: string (optional)
+     - status: string (optional)
+
+   Response:
+   {
+     "success": true,
+     "data": {
+       "emails": [ /* Array of inbound emails */ ]
+     }
+   }
+
+Webhook Endpoints (not for direct frontend use):
+- POST /api/v1/emails/webhook (Gmail webhook)
+- POST /api/v1/emails/inbound (Resend/SendGrid inbound webhook)
+
+Stub Endpoints:
+- POST /api/v1/emails/process
+- GET  /api/v1/emails/status/:jobId
+- GET  /api/v1/emails/status
+
+--------------------------------------------------------------------------------
+4.4 AUTHENTICATION & OAUTH
+--------------------------------------------------------------------------------
+Base Path: /api/v1/auth
+
+1. Initialize Temporary User (for OAuth setup)
+   POST /api/v1/auth/init-temp-user
+   Body: (optional)
+   {
+     "email": "user@example.com"
+   }
+
+   Response:
+   {
+     "success": true,
+     "data": {
+       "userId": "uuid",
+       "message": "Temporary user initialized"
+     }
+   }
+
+2. Gmail OAuth Callback
+   GET /api/v1/auth/gmail/callback
+   Query Params:
+     - code: string (from Google OAuth)
+     - state: string (userId)
+
+   This redirects to oauth-dashboard.html after completion.
+
+3. Trello OAuth Callback
+   Handled by: /trello-callback.html (static page)
+
+--------------------------------------------------------------------------------
+4.5 OTHER AVAILABLE ROUTES
+--------------------------------------------------------------------------------
+
+The backend has additional routes that may not be fully tested:
+
+- /api/v1/trello/*          - Trello integration endpoints
+- /api/v1/ai/*              - AI processing endpoints
+- /api/v1/config/*          - Configuration endpoints
+- /api/v1/process/*         - Email processing pipeline
+- /api/v1/queue/*           - Background job monitoring
+- /api/v1/automation/*      - One-click automation
+- /api/v1/board-automation/* - Board routing automation
+- /api/v1/activity/*        - Activity logs
+- /api/v1/users/*           - User management
+- /api/v1/follow-ups/*      - Follow-up detection
+
+Check the codebase for specific implementations.
+
+================================================================================
+5. DATA MODELS / TYPES
+================================================================================
+
+Client:
+{
+  id: string (UUID)
+  userId: string (UUID)
+  email: string
+  name?: string
+  company?: string
+  phone?: string
+  emailCount: number
+  firstContactDate: Date (ISO 8601)
+  lastContactDate: Date (ISO 8601)
+  status: 'active' | 'at_risk' | 'churned'
+  healthScore: number (0-100)
+  healthUpdatedAt?: Date (ISO 8601)
+  notes?: string
+  metadata?: object
+  createdAt: Date (ISO 8601)
+  updatedAt: Date (ISO 8601)
+}
+
+Task (Planned - not yet implemented):
+{
+  id: string
+  title: string
+  description?: string
+  dueDate?: string
+  priority?: 'low' | 'medium' | 'high' | 'urgent'
+  status: 'pending' | 'in_progress' | 'completed'
+  clientId?: string
+  boardId?: string
+  listId?: string
+}
+
+Email (Inbound):
+{
+  id: string
+  userId: string
+  from: string
+  to: string
+  subject: string
+  body: string
+  receivedAt: Date
+  processedAt?: Date
+  status: 'pending' | 'processed' | 'failed'
+}
+
+================================================================================
+6. CORS CONFIGURATION
+================================================================================
+
+The backend is configured to accept requests from specific origins.
+
+Currently Allowed Origins (in local .env):
+- http://localhost:3000
+- http://localhost:5173
+- http://localhost:8080
+
+⚠️  IMPORTANT FOR FRONTEND TEAM:
+If your frontend is hosted at a different URL, you'll need to:
+1. Update the ALLOWED_ORIGINS environment variable in Railway
+2. Or coordinate with backend team to add your frontend URL
+
+================================================================================
+7. RATE LIMITING
+================================================================================
+
+Rate Limits:
+- Default: 100 requests per 15 minutes
+- Webhooks: 100-200 requests per minute
+
+If you hit rate limits, you'll receive:
+{
+  "success": false,
+  "error": {
+    "message": "Too many requests, please try again later."
+  }
+}
+
+HTTP Status: 429 (Too Many Requests)
+
+================================================================================
+8. ERROR HANDLING
+================================================================================
+
+HTTP Status Codes Used:
+- 200: Success
+- 201: Created
+- 400: Bad Request (validation errors)
+- 401: Unauthorized (missing or invalid auth token)
+- 403: Forbidden (valid auth but insufficient permissions)
+- 404: Not Found
+- 429: Too Many Requests (rate limit exceeded)
+- 500: Internal Server Error
+
+Error Response Format:
+{
+  "success": false,
+  "error": {
+    "message": "Human-readable error message",
+    "details": {
+      // Optional: additional error context
+    }
+  }
+}
+
+================================================================================
+9. TESTING RECOMMENDATIONS
+================================================================================
+
+1. Health Check First:
+   curl https://tasksnap-v2-production.up.railway.app/health
+
+2. Test Client Endpoints (need auth token):
+   # You'll need a valid JWT token
+   curl -H "Authorization: Bearer YOUR_TOKEN" \
+        https://tasksnap-v2-production.up.railway.app/api/v1/clients
+
+3. Initialize Temp User (for testing):
+   curl -X POST \
+        -H "Content-Type: application/json" \
+        https://tasksnap-v2-production.up.railway.app/api/v1/auth/init-temp-user
+
+4. Use Postman/Insomnia:
+   - Import the base URL
+   - Set up environment variables for auth tokens
+   - Test each endpoint systematically
+
+================================================================================
+10. KNOWN LIMITATIONS & ISSUES
+================================================================================
+
+⚠️  Current Limitations:
+
+1. Task Endpoints:
+   - NOT fully implemented yet
+   - All task routes return stub responses
+   - DO NOT use in production until implemented
+
+2. Authentication:
+   - JWT implementation is basic
+   - Using temporary userId approach for OAuth
+   - Full user management in progress
+
+3. Email Processing:
+   - Some email endpoints are stubs
+   - Webhook endpoints work but need proper setup
+   - Gmail watch notifications require additional setup
+
+4. CORS:
+   - Make sure your frontend URL is in ALLOWED_ORIGINS
+   - Contact backend team if you get CORS errors
+
+5. This is the OLD deployment:
+   - Does NOT include latest cleanup changes
+   - New features on local branch are NOT deployed
+   - Use this only to test old/stable features
+
+================================================================================
+11. FRONTEND INTEGRATION CHECKLIST
+================================================================================
+
+Before integrating:
+ [ ] Verify health check endpoint works
+ [ ] Get JWT authentication working
+ [ ] Test client list endpoint
+ [ ] Test client detail endpoint
+ [ ] Handle error responses properly
+ [ ] Implement rate limit handling (retry logic)
+ [ ] Set up CORS if needed
+ [ ] Add loading states for API calls
+ [ ] Add error states for failed requests
+ [ ] Test with real data (not mock data)
+
+================================================================================
+12. QUICK START EXAMPLE (JavaScript/TypeScript)
+================================================================================
+
+// 1. Set up API client
+const API_BASE_URL = 'https://tasksnap-v2-production.up.railway.app/api/v1';
+
+// 2. Helper function for API calls
+async function apiRequest(endpoint, options = {}) {
+  const url = `${API_BASE_URL}${endpoint}`;
+  const config = {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${getAuthToken()}`, // Your auth token
+      ...options.headers,
+    },
+  };
+
+  const response = await fetch(url, config);
+  const data = await response.json();
+
+  if (!data.success) {
+    throw new Error(data.error?.message || 'API request failed');
+  }
+
+  return data;
+}
+
+// 3. Example: Fetch clients
+async function fetchClients(filters = {}) {
+  const queryParams = new URLSearchParams(filters).toString();
+  const endpoint = `/clients${queryParams ? `?${queryParams}` : ''}`;
+
+  const response = await apiRequest(endpoint);
+  return response.data.clients;
+}
+
+// 4. Example: Get client by ID
+async function getClient(clientId) {
+  const response = await apiRequest(`/clients/${clientId}`);
+  return response.data.client;
+}
+
+// 5. Example: Create client
+async function createClient(clientData) {
+  const response = await apiRequest('/clients', {
+    method: 'POST',
+    body: JSON.stringify(clientData),
+  });
+  return response.data.client;
+}
+
+// 6. Example: Update client
+async function updateClient(clientId, updates) {
+  const response = await apiRequest(`/clients/${clientId}`, {
+    method: 'PUT',
+    body: JSON.stringify(updates),
+  });
+  return response.data.client;
+}
+
+// 7. Example usage
+try {
+  const clients = await fetchClients({ status: 'active', sortBy: 'name' });
+  console.log('Active clients:', clients);
+
+  const client = await getClient(clients[0].id);
+  console.log('Client details:', client);
+} catch (error) {
+  console.error('API Error:', error.message);
+}
+
+================================================================================
+13. CONTACT & SUPPORT
+================================================================================
+
+Questions or Issues:
+- Check this documentation first
+- Review backend source code in /backend/src/routes/
+- Check Railway deployment logs
+- Coordinate with backend team for CORS/auth issues
+
+Backend Repository:
+- Location: /backend/
+- Routes: /backend/src/routes/
+- Controllers: /backend/src/controllers/
+- Types: /backend/src/types/
+
+================================================================================
+END OF INTEGRATION GUIDE
+================================================================================
+
+This is the OLD deployed version. New features from the cleanup branch
+are NOT available in this deployment. Use this guide to test existing
+stable features only.

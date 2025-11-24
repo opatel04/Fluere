@@ -25,7 +25,7 @@ import { ValidationError, UnprocessableError } from '../types/errors';
 export const processInbox = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   // userId is guaranteed by extractUserId middleware
   const userId = (req as any).userId;
-  const { maxEmails = 50, labelFilter = 'INBOX' } = req.body;
+  const { maxEmails = 50, labelFilter = 'INBOX' } = req.body || {};
 
   logger.info(`Starting auto-process inbox for user ${userId}`);
 
@@ -69,9 +69,9 @@ export const processInbox = asyncHandler(async (req: Request, res: Response): Pr
 
     // Store email metadata in database if not already exists
     await db.query(
-      `INSERT INTO emails (user_id, message_id, processing_status, created_at)
-       VALUES ($1, $2, $3, NOW())
-       ON CONFLICT (user_id, message_id) DO UPDATE
+      `INSERT INTO emails (user_id, gmail_id, message_id, processing_status, created_at)
+       VALUES ($1, $2, $2, $3, NOW())
+       ON CONFLICT (user_id, gmail_id) DO UPDATE
        SET processing_status = $3`,
       [userId, email.id, 'pending']
     );
@@ -101,7 +101,7 @@ export const processInbox = asyncHandler(async (req: Request, res: Response): Pr
 export const processFiltered = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   // userId is guaranteed by extractUserId middleware
   const userId = (req as any).userId;
-  const { filter, maxEmails = 50 } = req.body;
+  const { filter, maxEmails = 50 } = req.body || {};
 
   if (!filter) {
     throw new ValidationError('filter is required');

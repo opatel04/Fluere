@@ -667,6 +667,35 @@ class TrelloService {
   }
 
   /**
+   * Get connection status with user details
+   */
+  async getConnectionStatus(userId: string): Promise<{
+    connected: boolean;
+    username?: string;
+    fullName?: string;
+  }> {
+    try {
+      const result = await query(
+        'SELECT username, full_name FROM trello_tokens WHERE user_id = $1',
+        [userId]
+      );
+
+      if (result.rows.length === 0) {
+        return { connected: false };
+      }
+
+      return {
+        connected: true,
+        username: result.rows[0].username,
+        fullName: result.rows[0].full_name,
+      };
+    } catch (error) {
+      logger.error('Error getting Trello connection status:', error);
+      return { connected: false };
+    }
+  }
+
+  /**
    * Search for cards across boards
    */
   async searchCards(

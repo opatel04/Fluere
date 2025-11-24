@@ -9,8 +9,8 @@ import db from '../config/database';
  * Processes email-related jobs from Bull queues in the background
  */
 
-// Process single email job
-emailQueue.process(async (job: Job<EmailProcessingJob>) => {
+// Process single email job - concurrency of 5 for parallel processing
+emailQueue.process(5, async (job: Job<EmailProcessingJob>) => {
   const { userId, messageId, historyId } = job.data;
 
   logger.info('Processing email job', {
@@ -40,8 +40,9 @@ emailQueue.process(async (job: Job<EmailProcessingJob>) => {
       ]
     );
 
-    // Process the email using existing email processor service
-    const result = await emailProcessorService.processEmailToTrello(userId, messageId);
+    // Process the email to pending queue (for user approval workflow)
+    // This extracts tasks with AI and saves them to pending_tasks table
+    const result = await emailProcessorService.processEmailToPending(userId, messageId);
 
     // Update job status to completed
     await db.query(
@@ -75,7 +76,7 @@ emailQueue.process(async (job: Job<EmailProcessingJob>) => {
     logger.info('Email job completed successfully', {
       jobId: job.id,
       tasksExtracted: result.tasksExtracted,
-      cardsCreated: result.cardsCreated,
+      tasksSaved: result.tasksSaved,
       confidence: result.confidence,
       processingTimeMs: processingTime,
     });
@@ -147,8 +148,8 @@ batchQueue.process(async (job: Job<BatchProcessingJob>) => {
       ]
     );
 
-    // Process batch of emails
-    const result = await emailProcessorService.processEmailsToTrello(userId, {
+    // Process batch of emails to pending queue
+    const result = await emailProcessorService.processEmailsToPending(userId, {
       maxEmails: maxResults || 10,
       query,
     });
@@ -169,7 +170,7 @@ batchQueue.process(async (job: Job<BatchProcessingJob>) => {
       jobId: job.id,
       emailsProcessed: result.emailsProcessed,
       totalTasksExtracted: result.totalTasksExtracted,
-      totalCardsCreated: result.totalCardsCreated,
+      totalTasksSaved: result.totalTasksSaved,
       averageConfidence: result.averageConfidence,
       processingTimeMs: processingTime,
     });

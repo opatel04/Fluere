@@ -1,10 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "WebSearch",
-      "Bash(npm install:*)",
-      "Read(//Users/ompatel/**)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nFix client stats endpoint by replacing database function with direct SQL\n\nThe /api/v1/clients/:id/stats endpoint was failing because it relied on a\ndatabase function get_client_stats() that doesn''t exist in production.\nReplaced the function call with direct SQL queries to calculate stats inline,\nmaking the endpoint more robust and eliminating the database dependency.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+      "Bash(psql:*)",
+      "Bash(npm install)",
+      "Bash(npm run dev:*)",
+      "Bash(mkdir:*)",
+      "Bash(npx tsc:*)"
     ],
     "deny": [],
     "ask": []
