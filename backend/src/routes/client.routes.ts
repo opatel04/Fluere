@@ -36,7 +36,9 @@ router.delete('/:id', apiLimiter, clientController.archiveClient);
 router.get('/:id/tasks', apiLimiter, clientController.getClientTasks);
 
 // Get all emails for a client
-router.get('/:id/emails', apiLimiter, clientController.getClientEmails);
+router.get('/:id/emails', clientController.getClientEmails);
+router.get('/:id/heatmap', clientController.getClientHeatmap);
+router.get('/:id/summary', clientController.getClientSummary);
 
 // Get activity timeline for a client
 router.get('/:id/timeline', apiLimiter, clientController.getClientTimeline);

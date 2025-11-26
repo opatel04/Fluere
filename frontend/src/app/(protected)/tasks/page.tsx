@@ -30,6 +30,8 @@ import {
   Star,
   Archive,
   Sparkles,
+  Mail,
+  ExternalLink,
 } from 'lucide-react';
 
 // Priority badge styles
@@ -127,20 +129,22 @@ function TaskRow({
           {senderName}
         </div>
 
-        {/* Subject and snippet */}
+        {/* Subject */}
         <div className="flex-1 min-w-0 flex items-center gap-2">
           <span className="font-medium text-slate-800 dark:text-white truncate">
-            {task.title || task.email_subject}
+            {task.email_subject || task.title}
           </span>
-          <span className="text-slate-500 dark:text-white/50 truncate">
-            - {task.snippet || task.description?.substring(0, 100) || 'No preview available'}
-          </span>
+          {task.email_subject && task.title !== task.email_subject && (
+            <Badge variant="outline" className="text-xs flex-shrink-0">
+              {task.title}
+            </Badge>
+          )}
         </div>
 
         {/* Labels */}
         {task.labels && task.labels.length > 0 && (
           <div className="flex gap-1 flex-shrink-0">
-            {task.labels.slice(0, 2).map((label, i) => (
+            {task.labels.slice(0, 4).map((label, i) => (
               <Badge key={i} variant="outline" className="text-xs px-1.5 py-0">
                 {label}
               </Badge>
@@ -239,6 +243,21 @@ function TaskRow({
                 <XCircle className="w-4 h-4" />
                 Reject
               </Button>
+              {task.gmail_link && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open(task.gmail_link, '_blank');
+                  }}
+                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-500/10 gap-1"
+                >
+                  <Mail className="w-4 h-4" />
+                  View in Gmail
+                  <ExternalLink className="w-3 h-3" />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"

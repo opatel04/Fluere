@@ -7,6 +7,7 @@ import ClientService from './client.service';
 import db from '../config/database';
 import logger from '../config/logger';
 import { ExtractedTask, ProcessingOptions } from '../types/ai.types';
+import { detectTaskWithContext } from '../utils/task-detector';
 
 /**
  * Email Processing Service
@@ -126,9 +127,360 @@ class EmailProcessorService {
   }
 
   /**
+   * ULTRA-FAST: Metadata-only email processing (99.5% cost reduction!)
+   *
+   * Strategy:
+   * 1. Extract metadata (free - just parsing)
+   * 2. Quick categorization with cheap AI (~$0.0001/email)
+   * 3. Rule-based task detection (free - keyword matching)
+   * 4. Store metadata + Gmail link
+   * 5. Skip expensive AI until user requests it
+   *
+   * Cost: ~$0.0001 per email vs ~$0.02 (99.5% savings!)
+   */
+  async processEmailMetadataOnly(
+    userId: string,
+    messageId: string
+  ): Promise<{
+    success: boolean;
+    emailId?: string;
+    taskCreated: boolean;
+    taskId?: string;
+    category?: string;
+    likelyHasTask?: boolean;
+  }> {
+    const startTime = Date.now();
+
+    try {
+      logger.info(`[METADATA-ONLY] Processing email ${messageId} for user ${userId}`);
+
+      // Step 1: Fetch email from Gmail
+      const emailMessage = await gmailService.getEmailById(userId, messageId);
+
+      if (!emailMessage) {
+        throw new Error(`Email ${messageId} not found`);
+      }
+
+      const email = gmailService.parseEmail(emailMessage);
+      const snippet = email.snippet || email.body?.substring(0, 200) || '';
+
+      // Step 2: Check if email already processed
+      const existingEmail = await db.query(
+        `SELECT id, gmail_id FROM emails WHERE gmail_id = $1 AND user_id = $2`,
+        [messageId, userId]
+      );
+
+      if (existingEmail.rows.length > 0) {
+        logger.info(`Email ${messageId} already processed, skipping`);
+        return { success: true, emailId: existingEmail.rows[0].id, taskCreated: false };
+      }
+
+      // Step 3: Quick categorization using cheap AI (subject + snippet only)
+      // Cost: ~$0.0001 per email
+      const category = await aiService.quickCategorize(email.subject || 'No Subject', snippet);
+      logger.info(`Categorized as: ${category}`);
+
+      // Step 4: Rule-based task detection (NO AI - free!)
+      const taskDetection = detectTaskWithContext(
+        email.subject || '',
+        snippet,
+        category
+      );
+
+      logger.info(
+        `Task detection: ${taskDetection.hasTask ? 'YES' : 'NO'} (confidence: ${taskDetection.confidence}%)`,
+        { indicators: taskDetection.indicators }
+      );
+
+      // Step 5: Build Gmail link
+      const gmailLink = `https://mail.google.com/mail/u/0/#inbox/${messageId}`;
+
+      // Step 6: Auto-detect/create client from sender
+      let clientId: string | null = null;
+      try {
+        const { email: senderEmail, name: senderName } = this.extractEmailAndName(email.from);
+        if (senderEmail) {
+          clientId = await this.clientService.findOrCreateClient(userId, senderEmail, senderName);
+          logger.info(`Linked to client: ${senderEmail} (${clientId})`);
+        }
+      } catch (error) {
+        logger.warn(`Failed to detect/create client:`, error);
+      }
+
+      // Step 7: Store email metadata in emails table
+      const emailResult = await db.query(
+        `INSERT INTO emails (
+          user_id, gmail_id, thread_id, subject, sender, sender_email,
+          received_at, snippet, category, likely_has_task, gmail_link,
+          client_id, processing_status, processed_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'completed', NOW())
+        RETURNING id`,
+        [
+          userId,
+          messageId,
+          email.threadId,
+          email.subject,
+          email.from,
+          this.extractEmailAndName(email.from).email,
+          email.date,
+          snippet,
+          category,
+          taskDetection.hasTask,
+          gmailLink,
+          clientId,
+        ]
+      );
+
+      const emailId = emailResult.rows[0].id;
+
+      // Step 8: Create pending task if ANY indicators found - let user decide!
+      let taskId: string | null = null;
+      if (taskDetection.hasTask) {
+        const priority = this.detectPriorityFromEmail(email);
+        // AI-powered smart labels for instant inbox scanning! 🚀
+        // Use full email body (up to 1000 chars) for comprehensive label extraction
+        const labelContent = (email.body || snippet).substring(0, 1000);
+        const labels = await aiService.extractSmartLabels(email.subject || '', labelContent, category);
+        const dueDate = this.detectDueDateFromEmail(email);
+
+        const taskResult = await db.query(
+          `INSERT INTO pending_tasks (
+            user_id, email_id, email_subject, email_from, email_date,
+            title, description, snippet, priority, category, due_date,
+            labels, confidence, extraction_source, status, ai_processed, client_id, gmail_link
+          ) VALUES ($1, $2, $3, $4, $5, $6, NULL, $7, $8, $9, $10, $11, $12, 'automation', 'pending', false, $13, $14)
+          RETURNING id`,
+          [
+            userId,
+            messageId,
+            email.subject,
+            email.from,
+            email.date,
+            email.subject, // Title = subject initially
+            snippet,
+            priority,
+            category,
+            dueDate,
+            JSON.stringify(labels),
+            taskDetection.confidence / 100, // Store as 0-1 float
+            clientId,
+            gmailLink,
+          ]
+        );
+
+        taskId = taskResult.rows[0].id;
+        logger.info(`Created pending task ${taskId} (confidence: ${taskDetection.confidence}%)`);
+      }
+
+      const processingTime = Date.now() - startTime;
+      logger.info(
+        `[METADATA-ONLY] Processed in ${processingTime}ms | Category: ${category} | Task: ${taskDetection.hasTask ? 'YES' : 'NO'}`
+      );
+
+      return {
+        success: true,
+        emailId,
+        taskCreated: !!taskId,
+        taskId: taskId || undefined,
+        category,
+        likelyHasTask: taskDetection.hasTask,
+      };
+    } catch (error) {
+      logger.error('[METADATA-ONLY] Error processing email:', error);
+      throw new Error('Failed to process email metadata');
+    }
+  }
+
+  /**
+   * ON-DEMAND: Full AI task extraction for a specific email
+   *
+   * This is the expensive operation (~$0.02/email) that runs ONLY when:
+   * - User clicks "Extract Tasks" button on an email
+   * - User manually requests detailed task analysis
+   *
+   * Cost: ~$0.02 per email (only when requested!)
+   *
+   * Returns extracted tasks with full AI analysis
+   */
+  async extractTasksOnDemand(
+    userId: string,
+    emailIdOrGmailId: string
+  ): Promise<{
+    success: boolean;
+    tasks: ExtractedTask[];
+    emailId: string;
+    processingTime: number;
+  }> {
+    const startTime = Date.now();
+
+    try {
+      logger.info(`[ON-DEMAND] Extracting tasks from email ${emailIdOrGmailId}`);
+
+      // Step 1: Get email from database or Gmail
+      let email: any;
+      let emailDbId: string;
+      let gmailId: string;
+
+      // Check if it's a UUID (database ID) or Gmail ID
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        emailIdOrGmailId
+      );
+
+      if (isUUID) {
+        // Look up by database ID
+        const emailRecord = await db.query(
+          `SELECT id, gmail_id, subject, snippet, body FROM emails WHERE id = $1 AND user_id = $2`,
+          [emailIdOrGmailId, userId]
+        );
+
+        if (emailRecord.rows.length === 0) {
+          throw new Error('Email not found in database');
+        }
+
+        emailDbId = emailRecord.rows[0].id;
+        gmailId = emailRecord.rows[0].gmail_id;
+
+        // Fetch full email from Gmail if body not stored
+        if (!emailRecord.rows[0].body) {
+          const emailMessage = await gmailService.getEmailById(userId, gmailId);
+          if (!emailMessage) {
+            throw new Error('Email not found in Gmail');
+          }
+          email = gmailService.parseEmail(emailMessage);
+        } else {
+          email = emailRecord.rows[0];
+        }
+      } else {
+        // Gmail ID - fetch from Gmail
+        gmailId = emailIdOrGmailId;
+        const emailMessage = await gmailService.getEmailById(userId, gmailId);
+        if (!emailMessage) {
+          throw new Error('Email not found in Gmail');
+        }
+        email = gmailService.parseEmail(emailMessage);
+
+        // Check if already in database
+        const emailRecord = await db.query(
+          `SELECT id FROM emails WHERE gmail_id = $1 AND user_id = $2`,
+          [gmailId, userId]
+        );
+
+        emailDbId = emailRecord.rows[0]?.id;
+      }
+
+      // Step 2: Check if already processed with full AI
+      const existingProcessing = await db.query(
+        `SELECT full_ai_processed FROM emails WHERE gmail_id = $1 AND user_id = $2`,
+        [gmailId, userId]
+      );
+
+      if (existingProcessing.rows[0]?.full_ai_processed) {
+        logger.info('Email already processed with full AI, retrieving existing tasks...');
+        const existingTasks = await db.query(
+          `SELECT * FROM pending_tasks WHERE email_id = $1 AND user_id = $2 AND ai_processed = true`,
+          [gmailId, userId]
+        );
+
+        return {
+          success: true,
+          tasks: existingTasks.rows,
+          emailId: emailDbId,
+          processingTime: Date.now() - startTime,
+        };
+      }
+
+      // Step 3: Run expensive AI extraction
+      const emailContent = this.formatEmailForAI(email);
+      logger.info('[ON-DEMAND] Running full AI task extraction (this costs money!)...');
+
+      const extraction = await aiService.processEmailWithValidation(emailContent, {
+        enableValidation: true,
+        confidenceThreshold: 0.85,
+      });
+
+      logger.info(
+        `[ON-DEMAND] Extracted ${extraction.tasks.length} tasks with ${(extraction.confidence * 100).toFixed(1)}% confidence`
+      );
+
+      // Step 4: Save extracted tasks to pending_tasks
+      const savedTasks: ExtractedTask[] = [];
+      const clientId = await this.getClientIdForEmail(userId, email.from);
+
+      for (const task of extraction.tasks) {
+        const taskResult = await db.query(
+          `INSERT INTO pending_tasks (
+            user_id, email_id, email_subject, email_from, email_date,
+            title, description, snippet, priority, category, due_date,
+            labels, confidence, extraction_source, status, ai_processed, client_id
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'ai_on_demand', 'pending', true, $14)
+          RETURNING *`,
+          [
+            userId,
+            gmailId,
+            email.subject,
+            email.from,
+            email.date,
+            task.name, // ExtractedTask uses 'name' not 'title'
+            task.description,
+            email.snippet || '',
+            task.priority || 'medium',
+            task.category || null,
+            task.dueDate || null,
+            JSON.stringify(task.labels || []),
+            extraction.confidence,
+            clientId,
+          ]
+        );
+
+        savedTasks.push(taskResult.rows[0]);
+      }
+
+      // Step 5: Mark email as fully AI processed
+      await db.query(
+        `UPDATE emails
+         SET full_ai_processed = true, full_ai_processed_at = NOW()
+         WHERE gmail_id = $1 AND user_id = $2`,
+        [gmailId, userId]
+      );
+
+      const processingTime = Date.now() - startTime;
+      logger.info(
+        `[ON-DEMAND] Completed in ${processingTime}ms | ${savedTasks.length} tasks saved | Cost: ~$0.02`
+      );
+
+      return {
+        success: true,
+        tasks: savedTasks,
+        emailId: emailDbId,
+        processingTime,
+      };
+    } catch (error) {
+      logger.error('[ON-DEMAND] Error extracting tasks:', error);
+      throw new Error('Failed to extract tasks on demand');
+    }
+  }
+
+  /**
+   * Helper: Get client ID for email sender
+   */
+  private async getClientIdForEmail(userId: string, fromEmail: string): Promise<string | null> {
+    try {
+      const { email: senderEmail, name: senderName } = this.extractEmailAndName(fromEmail);
+      if (senderEmail) {
+        return await this.clientService.findOrCreateClient(userId, senderEmail, senderName);
+      }
+    } catch (error) {
+      logger.warn('Failed to get client ID:', error);
+    }
+    return null;
+  }
+
+  /**
    * FAST: Process email to pending queue WITHOUT AI (Option B - lazy loading)
    * Just stores email metadata with heuristic-based priority
    * Description is generated on-demand when user clicks
+   *
+   * @deprecated Use processEmailMetadataOnly instead for better performance
    */
   async processEmailToPendingFast(
     userId: string,
@@ -574,25 +926,18 @@ class EmailProcessorService {
         errors: [] as string[],
       };
 
-      // Process each email
+      // Process each email with metadata-only approach (99.5% cost reduction!)
       for (const emailMessage of emails.messages) {
         try {
-          const result = await this.processEmailToPending(
-            userId,
-            emailMessage.id,
-            {
-              processingOptions: options?.processingOptions,
-            }
-          );
+          const result = await this.processEmailMetadataOnly(userId, emailMessage.id);
 
           results.emailsProcessed++;
-          results.totalTasksExtracted += result.tasksExtracted;
-          results.totalTasksSaved += result.tasksSaved;
-          results.totalConfidence += result.confidence;
+          results.totalTasksExtracted += result.taskCreated ? 1 : 0;
+          results.totalTasksSaved += result.taskCreated ? 1 : 0;
+          // Note: No confidence score from metadata-only processing
+          // Confidence is only from rule-based detection, not AI
 
-          if (result.issues) {
-            results.errors.push(...result.issues);
-          }
+          logger.info(`Batch email processed: ${emailMessage.id} | Category: ${result.category} | Task: ${result.taskCreated}`);
         } catch (error) {
           const errorMsg = `Failed to process email ${emailMessage.id}`;
           logger.error(errorMsg, error);

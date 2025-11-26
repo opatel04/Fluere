@@ -19,21 +19,21 @@ export const listClients = asyncHandler(async (
   req: Request,
   res: Response
 ): Promise<void> => {
-    // userId is guaranteed by extractUserId middleware
-    const userId = (req as any).userId;
+  // userId is guaranteed by extractUserId middleware
+  const userId = (req as any).userId;
 
-    const filters = {
-      status: req.query.status as 'active' | 'at_risk' | 'churned' | undefined,
-      minHealthScore: req.query.minHealthScore ? parseInt(req.query.minHealthScore as string) : undefined,
-      maxHealthScore: req.query.maxHealthScore ? parseInt(req.query.maxHealthScore as string) : undefined,
-      searchQuery: req.query.search as string,
-      sortBy: (req.query.sortBy as 'name' | 'last_contact' | 'health_score' | 'email_count') || 'last_contact',
-      sortOrder: (req.query.sortOrder as 'asc' | 'desc') || 'desc',
-    };
+  const filters = {
+    status: req.query.status as 'active' | 'at_risk' | 'churned' | undefined,
+    minHealthScore: req.query.minHealthScore ? parseInt(req.query.minHealthScore as string) : undefined,
+    maxHealthScore: req.query.maxHealthScore ? parseInt(req.query.maxHealthScore as string) : undefined,
+    searchQuery: req.query.search as string,
+    sortBy: (req.query.sortBy as 'name' | 'last_contact' | 'health_score' | 'email_count') || 'last_contact',
+    sortOrder: (req.query.sortOrder as 'asc' | 'desc') || 'desc',
+  };
 
-    const clients = await clientService.listClients(userId, filters);
+  const clients = await clientService.listClients(userId, filters);
 
-    successWithCount(res, clients);
+  successWithCount(res, clients);
 });
 
 /**
@@ -243,6 +243,37 @@ export const updateHealthScore = asyncHandler(async (
   successResponse(res, { healthScore }, 'Health score updated successfully');
 });
 
+/**
+ * Get client activity heatmap
+ * GET /api/v1/clients/:id/heatmap
+ */
+export const getClientHeatmap = asyncHandler(async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  const { id } = req.params;
+  const heatmap = await clientService.getClientActivityHeatmap(id);
+
+  successResponse(res, heatmap);
+});
+
+/**
+ * Get client AI summary
+ * GET /api/v1/clients/:id/summary
+ */
+export const getClientSummary = asyncHandler(async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  // userId is guaranteed by extractUserId middleware
+  const userId = (req as any).userId;
+  const { id } = req.params;
+
+  const summary = await clientService.generateClientSummary(id, userId);
+
+  successResponse(res, { summary });
+});
+
 export default {
   listClients,
   getClientDetails,
@@ -255,4 +286,6 @@ export default {
   getClientStats,
   getAtRiskClients,
   updateHealthScore,
+  getClientHeatmap,
+  getClientSummary,
 };

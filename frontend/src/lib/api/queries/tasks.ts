@@ -233,6 +233,7 @@ export interface PendingTask {
   email_subject?: string;
   email_from?: string;
   email_date?: string;
+  gmail_link?: string; // Link to view email in Gmail
   client_id?: string; // Auto-detected client from email sender
   title: string;
   description?: string;

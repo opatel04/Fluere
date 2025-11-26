@@ -35,11 +35,11 @@ export const processInbox = asyncHandler(async (req: Request, res: Response): Pr
     throw new UnprocessableError('Gmail not connected. Please connect your Gmail account first.');
   }
 
-  // Fetch unread emails from Gmail
+  // Fetch unread emails from Gmail (all tabs: Primary, Promotions, Social, Updates)
   const emails = await gmailService.fetchEmails(userId, {
     maxResults: maxEmails,
     query: 'is:unread',
-    labelIds: [labelFilter],
+    // Don't filter by labelIds to get emails from all tabs
   });
 
   if (emails.messages.length === 0) {
@@ -66,15 +66,6 @@ export const processInbox = asyncHandler(async (req: Request, res: Response): Pr
     );
 
     jobIds.push(jobId);
-
-    // Store email metadata in database if not already exists
-    await db.query(
-      `INSERT INTO emails (user_id, gmail_id, message_id, processing_status, created_at)
-       VALUES ($1, $2, $2, $3, NOW())
-       ON CONFLICT (user_id, gmail_id) DO UPDATE
-       SET processing_status = $3`,
-      [userId, email.id, 'pending']
-    );
   }
 
   logger.info(`Enqueued ${jobIds.length} email processing jobs for user ${userId}`);

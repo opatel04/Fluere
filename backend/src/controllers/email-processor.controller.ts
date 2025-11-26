@@ -141,3 +141,35 @@ export const testQuickExtraction = asyncHandler(async (req: Request, res: Respon
     count: tasks.length,
   });
 });
+
+/**
+ * ON-DEMAND: Extract tasks from a specific email with full AI
+ * This is the expensive operation that runs only when user requests it
+ *
+ * POST /api/v1/process/extract-tasks/:emailId
+ *
+ * Cost: ~$0.02 per email (only when explicitly requested)
+ */
+export const extractTasksOnDemand = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const userId = req.body.userId || (req as any).session?.userId;
+  const { emailId } = req.params; // Can be Gmail ID or database UUID
+
+  if (!userId) {
+    throw new ValidationError('User ID is required');
+  }
+
+  if (!emailId) {
+    throw new ValidationError('Email ID is required');
+  }
+
+  const result = await emailProcessorService.extractTasksOnDemand(userId, emailId);
+
+  successResponse(res, {
+    message: `Extracted ${result.tasks.length} tasks from email`,
+    emailId: result.emailId,
+    tasks: result.tasks,
+    taskCount: result.tasks.length,
+    processingTime: result.processingTime,
+    cost: '~$0.02',
+  });
+});

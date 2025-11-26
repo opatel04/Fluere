@@ -682,7 +682,7 @@ class ClientService {
           al.created_at as timestamp,
           NULL as sentiment
          FROM activity_logs al
-         WHERE al.resource_type = 'client' AND al.resource_id = $1 AND al.user_id = $2
+         WHERE al.resource_type = 'client' AND al.resource_id = $1::text AND al.user_id = $2
          ORDER BY timestamp DESC
          LIMIT $3`,
         [clientId, userId, limit]
@@ -731,6 +731,54 @@ class ClientService {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
+  }
+
+  /**
+   * Get client activity heatmap data (last 365 days)
+   */
+  async getClientActivityHeatmap(clientId: string): Promise<any[]> {
+    try {
+      const result = await query(
+        `SELECT
+           DATE(timestamp) as date,
+           COUNT(*) as count
+         FROM (
+           SELECT received_at as timestamp FROM emails WHERE client_id = $1
+           UNION ALL
+           SELECT created_at as timestamp FROM tasks WHERE client_id = $1
+         ) as activity
+         WHERE timestamp >= NOW() - INTERVAL '365 days'
+         GROUP BY DATE(timestamp)
+         ORDER BY date ASC`,
+        [clientId]
+      );
+
+      return result.rows.map((row: any) => ({
+        date: row.date.toISOString().split('T')[0],
+        count: parseInt(row.count)
+      }));
+    } catch (error) {
+      logger.error('Error in getClientActivityHeatmap:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate AI summary for client
+   */
+  async generateClientSummary(clientId: string, userId: string): Promise<string> {
+    try {
+      // Fetch recent interactions (last 10 emails/tasks)
+      const timeline = await this.getClientTimeline(clientId, userId, 10);
+
+      // Use AI service to generate summary
+      const { default: aiService } = await import('./ai.service');
+
+      return await aiService.generateClientSummary(timeline);
+    } catch (error) {
+      logger.error('Error in generateClientSummary:', error);
+      return `Error generating summary: ${error instanceof Error ? error.message : String(error)}`;
+    }
   }
 }
 

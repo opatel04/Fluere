@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../client';
+import { Task } from './tasks';
+import { Email } from './emails';
 
 export interface Client {
   id: string;
@@ -61,7 +63,7 @@ export function useClients(filters?: {
         if (filters?.sortOrder) params.append('sortOrder', filters.sortOrder);
 
         const response = await apiClient.get<BackendClientResponse>(`/clients?${params.toString()}`);
-        
+
         // Backend listClients returns raw database rows with snake_case
         // Transform to camelCase to match frontend expectations
         return response.data.data.map((client: any) => ({
@@ -105,10 +107,10 @@ export function useClient(id: string) {
     queryKey: ['clients', id],
     queryFn: async () => {
       const response = await apiClient.get<BackendClientDetailResponse>(`/clients/${id}`);
-      
+
       // Backend returns { success: true, data: { client: Client (camelCase), ... } }
       const client = response.data.data.client;
-      
+
       // Transform to match frontend expectations (include both camelCase and snake_case)
       return {
         ...client,
@@ -125,3 +127,77 @@ export function useClient(id: string) {
   });
 }
 
+interface ClientTasksResponse {
+  success: true;
+  data: Task[];
+  meta?: {
+    count: number;
+  };
+}
+
+interface ClientEmailsResponse {
+  success: true;
+  data: Email[];
+  meta?: {
+    count: number;
+  };
+}
+
+export function useClientTasks(clientId: string) {
+  return useQuery({
+    queryKey: ['clients', clientId, 'tasks'],
+    queryFn: async () => {
+      const response = await apiClient.get<ClientTasksResponse>(`/clients/${clientId}/tasks`);
+      return response.data.data.map((task: any) => ({
+        ...task,
+        client_id: task.client_id || task.clientId,
+        due_date: task.due_date || task.dueDate,
+        created_at: task.created_at || task.createdAt,
+        updated_at: task.updated_at || task.updatedAt,
+      })) as Task[];
+    },
+    enabled: !!clientId,
+  });
+}
+
+export function useClientEmails(clientId: string) {
+  return useQuery({
+    queryKey: ['clients', clientId, 'emails'],
+    queryFn: async () => {
+      const response = await apiClient.get<ClientEmailsResponse>(`/clients/${clientId}/emails`);
+      return response.data.data.map((email: any) => ({
+        ...email,
+        date: email.received_at || email.created_at || email.date,
+        thread_id: email.thread_id || email.threadId,
+        history_id: email.history_id || email.historyId,
+        internal_date: email.internal_date || email.internalDate,
+        created_at: email.created_at || email.createdAt,
+        updated_at: email.updated_at || email.updatedAt,
+      })) as Email[];
+    },
+    enabled: !!clientId,
+  });
+}
+
+export const useClientHeatmap = (clientId: string) => {
+  return useQuery({
+    queryKey: ['client-heatmap', clientId],
+    queryFn: async () => {
+      const response = await apiClient.get<{ date: string; count: number }[]>(`/clients/${clientId}/heatmap`);
+      return response.data.data;
+    },
+    enabled: !!clientId,
+  });
+};
+
+export const useClientSummary = (clientId: string) => {
+  return useQuery({
+    queryKey: ['client-summary', clientId],
+    queryFn: async () => {
+      const response = await apiClient.get<{ summary: string }>(`/clients/${clientId}/summary`);
+      return response.data.data;
+    },
+    staleTime: 1000 * 60 * 5, // Cache summary for 5 minutes
+    enabled: !!clientId,
+  });
+};
