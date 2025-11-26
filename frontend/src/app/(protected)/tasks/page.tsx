@@ -8,280 +8,260 @@ import {
   useRejectPendingTask,
   useApprovePendingTasksBulk,
   useRejectPendingTasksBulk,
-  useUpdatePendingTask,
+  useGenerateTaskDescription,
   PendingTask,
 } from '@/lib/api/queries/tasks';
 import { useTrelloBoards, useTrelloLists } from '@/lib/api/queries/trello';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import {
   CheckCircle2,
   XCircle,
-  Mail,
   Loader2,
   Inbox,
-  ArrowRight,
   Clock,
   AlertCircle,
-  Edit2,
-  Check,
-  X,
-  Calendar,
-  Tag,
+  ChevronDown,
+  ChevronRight,
+  Star,
+  Archive,
+  Sparkles,
 } from 'lucide-react';
 
-const priorityColors = {
-  urgent: 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400',
-  high: 'bg-orange-100 text-orange-700 dark:bg-orange-500/10 dark:text-orange-400',
-  medium: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-400',
-  low: 'bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400',
+// Priority badge styles
+const priorityStyles = {
+  urgent: 'bg-red-500 text-white',
+  high: 'bg-orange-500 text-white',
+  medium: 'bg-yellow-500 text-black',
+  low: 'bg-green-500 text-white',
 };
 
-const priorityIcons = {
-  urgent: AlertCircle,
-  high: AlertCircle,
-  medium: Clock,
-  low: Clock,
-};
-
-function TaskCard({
+// Gmail-style row component
+function TaskRow({
   task,
-  boards,
-  lists,
-  selectedBoardId,
-  onBoardChange,
+  isSelected,
+  isExpanded,
+  onSelect,
+  onExpand,
   onApprove,
   onReject,
-  onEdit,
-  isProcessing,
+  onGenerateDescription,
+  isGenerating,
+  selectedListId,
 }: {
   task: PendingTask;
-  boards: any[] | undefined;
-  lists: any[] | undefined;
-  selectedBoardId: string;
-  onBoardChange: (boardId: string) => void;
-  onApprove: (task: PendingTask, listId: string) => void;
+  isSelected: boolean;
+  isExpanded: boolean;
+  onSelect: (id: string) => void;
+  onExpand: (id: string) => void;
+  onApprove: (task: PendingTask) => void;
   onReject: (taskId: string) => void;
-  onEdit: (taskId: string, updates: Partial<PendingTask>) => void;
-  isProcessing: boolean;
+  onGenerateDescription: (taskId: string) => void;
+  isGenerating: boolean;
+  selectedListId: string;
 }) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedTitle, setEditedTitle] = useState(task.title);
-  const [editedDescription, setEditedDescription] = useState(task.description || '');
-  const [editedPriority, setEditedPriority] = useState(task.priority);
-  const [selectedListId, setSelectedListId] = useState(lists?.[0]?.id || '');
+  // Format sender name (extract name from "Name <email>" format)
+  const senderName = task.email_from?.split('<')[0]?.trim() || task.email_from || 'Unknown';
 
-  const PriorityIcon = priorityIcons[task.priority] || Clock;
+  // Format date
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
 
-  const handleSaveEdit = () => {
-    onEdit(task.id, {
-      title: editedTitle,
-      description: editedDescription,
-      priority: editedPriority,
-    });
-    setIsEditing(false);
-  };
+    if (isToday) {
+      return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    }
 
-  const handleCancelEdit = () => {
-    setEditedTitle(task.title);
-    setEditedDescription(task.description || '');
-    setEditedPriority(task.priority);
-    setIsEditing(false);
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) {
+      return 'Yesterday';
+    }
+
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
   return (
-    <Card className="border-2 border-blue-500 dark:border-white/10 bg-white/90 backdrop-blur-sm dark:bg-black hover:shadow-lg transition-shadow">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            {isEditing ? (
-              <Input
-                value={editedTitle}
-                onChange={(e) => setEditedTitle(e.target.value)}
-                className="font-semibold"
-              />
-            ) : (
-              <CardTitle className="text-base font-semibold text-slate-800 dark:text-white truncate">
-                {task.title}
-              </CardTitle>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {isEditing ? (
-              <Select value={editedPriority} onValueChange={(v: any) => setEditedPriority(v)}>
-                <SelectTrigger className="w-[100px] h-7">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="urgent">Urgent</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
-                </SelectContent>
-              </Select>
-            ) : (
-              <Badge className={cn('capitalize', priorityColors[task.priority])}>
-                <PriorityIcon className="w-3 h-3 mr-1" />
-                {task.priority}
-              </Badge>
-            )}
-          </div>
-        </div>
-        {task.email_subject && (
-          <CardDescription className="flex items-center gap-1 text-xs mt-1">
-            <Mail className="w-3 h-3" />
-            {task.email_subject}
-          </CardDescription>
+    <div className="border-b border-slate-200 dark:border-white/10">
+      {/* Main row - Gmail style */}
+      <div
+        className={cn(
+          'flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer transition-colors',
+          isSelected && 'bg-blue-50 dark:bg-blue-500/10',
+          isExpanded && 'bg-slate-50 dark:bg-white/5'
         )}
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Description */}
-        {isEditing ? (
-          <Textarea
-            value={editedDescription}
-            onChange={(e) => setEditedDescription(e.target.value)}
-            placeholder="Task description..."
-            className="min-h-[80px]"
-          />
+        onClick={() => onExpand(task.id)}
+      >
+        {/* Checkbox */}
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={(e) => {
+            e.stopPropagation();
+            onSelect(task.id);
+          }}
+          className="w-4 h-4 rounded border-slate-300 dark:border-white/20"
+        />
+
+        {/* Star (placeholder) */}
+        <Star className="w-4 h-4 text-slate-300 dark:text-white/20 hover:text-yellow-400 cursor-pointer" />
+
+        {/* Priority indicator */}
+        <div className={cn('w-2 h-2 rounded-full', priorityStyles[task.priority])} />
+
+        {/* Expand chevron */}
+        {isExpanded ? (
+          <ChevronDown className="w-4 h-4 text-slate-400" />
         ) : (
-          task.description && (
-            <p className="text-sm text-slate-600 dark:text-white/60 line-clamp-3">
-              {task.description}
-            </p>
-          )
+          <ChevronRight className="w-4 h-4 text-slate-400" />
         )}
 
-        {/* Meta info */}
-        <div className="flex flex-wrap gap-2 text-xs text-slate-500 dark:text-white/40">
-          {task.due_date && (
-            <span className="flex items-center gap-1">
-              <Calendar className="w-3 h-3" />
-              {new Date(task.due_date).toLocaleDateString()}
-            </span>
-          )}
-          {task.category && (
-            <span className="flex items-center gap-1">
-              <Tag className="w-3 h-3" />
-              {task.category}
-            </span>
-          )}
-          {task.confidence && (
-            <span className="flex items-center gap-1">
-              {Math.round(task.confidence * 100)}% confident
-            </span>
-          )}
+        {/* Sender */}
+        <div className="w-48 flex-shrink-0 truncate font-medium text-slate-800 dark:text-white">
+          {senderName}
+        </div>
+
+        {/* Subject and snippet */}
+        <div className="flex-1 min-w-0 flex items-center gap-2">
+          <span className="font-medium text-slate-800 dark:text-white truncate">
+            {task.title || task.email_subject}
+          </span>
+          <span className="text-slate-500 dark:text-white/50 truncate">
+            - {task.snippet || task.description?.substring(0, 100) || 'No preview available'}
+          </span>
         </div>
 
         {/* Labels */}
         {task.labels && task.labels.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {task.labels.map((label, i) => (
-              <Badge key={i} variant="outline" className="text-xs">
+          <div className="flex gap-1 flex-shrink-0">
+            {task.labels.slice(0, 2).map((label, i) => (
+              <Badge key={i} variant="outline" className="text-xs px-1.5 py-0">
                 {label}
               </Badge>
             ))}
           </div>
         )}
 
-        {/* List selector */}
-        {!isEditing && (
-          <div className="flex items-center gap-2">
-            <Select value={selectedBoardId} onValueChange={onBoardChange}>
-              <SelectTrigger className="flex-1 h-8 text-xs">
-                <SelectValue placeholder="Select board" />
-              </SelectTrigger>
-              <SelectContent>
-                {boards?.map((board) => (
-                  <SelectItem key={board.id} value={board.id}>
-                    {board.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <ArrowRight className="w-4 h-4 text-slate-400" />
-            <Select
-              value={selectedListId}
-              onValueChange={setSelectedListId}
-              disabled={!selectedBoardId || !lists?.length}
-            >
-              <SelectTrigger className="flex-1 h-8 text-xs">
-                <SelectValue placeholder="Select list" />
-              </SelectTrigger>
-              <SelectContent>
-                {lists?.map((list) => (
-                  <SelectItem key={list.id} value={list.id}>
-                    {list.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
+        {/* Date */}
+        <div className="w-20 text-right text-sm text-slate-500 dark:text-white/50 flex-shrink-0">
+          {formatDate(task.email_date || task.created_at)}
+        </div>
+      </div>
 
-        {/* Actions */}
-        <div className="flex justify-between gap-2 pt-2">
-          {isEditing ? (
-            <>
-              <Button variant="outline" size="sm" onClick={handleCancelEdit}>
-                <X className="w-4 h-4 mr-1" />
-                Cancel
-              </Button>
-              <Button size="sm" onClick={handleSaveEdit} className="bg-blue-600 text-white">
-                <Check className="w-4 h-4 mr-1" />
-                Save
-              </Button>
-            </>
-          ) : (
-            <>
-              <div className="flex gap-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsEditing(true)}
-                  className="text-slate-500"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onReject(task.id)}
-                  className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
-                >
-                  <XCircle className="w-4 h-4 mr-1" />
-                  Reject
-                </Button>
+      {/* Expanded content */}
+      {isExpanded && (
+        <div className="px-4 py-4 bg-slate-50 dark:bg-white/5 border-t border-slate-200 dark:border-white/10">
+          <div className="ml-[72px] space-y-4">
+            {/* Task details */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Badge className={cn('text-xs', priorityStyles[task.priority])}>
+                  {task.priority}
+                </Badge>
+                {task.category && (
+                  <Badge variant="outline" className="text-xs">
+                    {task.category}
+                  </Badge>
+                )}
+                {task.due_date && (
+                  <span className="text-xs text-slate-500 dark:text-white/50 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    Due: {new Date(task.due_date).toLocaleDateString()}
+                  </span>
+                )}
+                {task.ai_processed && (
+                  <Badge variant="outline" className="text-xs text-green-600 border-green-300">
+                    <Sparkles className="w-3 h-3 mr-1" />
+                    AI Processed
+                  </Badge>
+                )}
               </div>
+
+              {/* Description - show if available or generate button */}
+              {task.description ? (
+                <div className="text-sm text-slate-600 dark:text-white/70 whitespace-pre-wrap bg-white dark:bg-black/30 p-3 rounded-lg border border-slate-200 dark:border-white/10">
+                  {task.description}
+                </div>
+              ) : (
+                <div className="text-sm text-slate-500 dark:text-white/50">
+                  {isGenerating ? (
+                    <div className="flex items-center gap-2 p-3 bg-white dark:bg-black/30 rounded-lg border border-slate-200 dark:border-white/10">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Generating AI description...
+                    </div>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onGenerateDescription(task.id);
+                      }}
+                      className="gap-2"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      Generate AI Description
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-white/10">
               <Button
                 size="sm"
-                onClick={() => onApprove(task, selectedListId || lists?.[0]?.id)}
-                disabled={isProcessing || !selectedBoardId || !lists?.length}
-                className="bg-green-600 hover:bg-green-700 text-white"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onApprove(task);
+                }}
+                disabled={!selectedListId}
+                className="bg-green-600 hover:bg-green-700 text-white gap-1"
               >
-                {isProcessing ? (
-                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                ) : (
-                  <CheckCircle2 className="w-4 h-4 mr-1" />
-                )}
+                <CheckCircle2 className="w-4 h-4" />
                 Approve
               </Button>
-            </>
-          )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReject(task.id);
+                }}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-500/10 gap-1"
+              >
+                <XCircle className="w-4 h-4" />
+                Reject
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-slate-500 gap-1"
+              >
+                <Archive className="w-4 h-4" />
+                Archive
+              </Button>
+            </div>
+          </div>
         </div>
-      </CardContent>
-    </Card>
+      )}
+    </div>
   );
 }
 
 export default function TasksPage() {
   const { toast } = useToast();
+
+  // State
+  const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
+  const [expandedTask, setExpandedTask] = useState<string | null>(null);
+  const [generatingTasks, setGeneratingTasks] = useState<Set<string>>(new Set());
 
   // Fetch pending tasks from backend
   const { data: pendingTasks, isLoading: tasksLoading } = usePendingTasks('pending');
@@ -292,19 +272,71 @@ export default function TasksPage() {
   const rejectTask = useRejectPendingTask();
   const approveTasksBulk = useApprovePendingTasksBulk();
   const rejectTasksBulk = useRejectPendingTasksBulk();
-  const updateTask = useUpdatePendingTask();
+  const generateDescription = useGenerateTaskDescription();
 
   // Trello data
   const { data: boards, isLoading: boardsLoading } = useTrelloBoards();
   const [selectedBoardId, setSelectedBoardId] = useState<string>('');
   const { data: lists } = useTrelloLists(selectedBoardId || null);
 
+  const handleSelect = useCallback((taskId: string) => {
+    setSelectedTasks((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) {
+        next.delete(taskId);
+      } else {
+        next.add(taskId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    if (!pendingTasks) return;
+    if (selectedTasks.size === pendingTasks.length) {
+      setSelectedTasks(new Set());
+    } else {
+      setSelectedTasks(new Set(pendingTasks.map((t) => t.id)));
+    }
+  }, [pendingTasks, selectedTasks.size]);
+
+  const handleExpand = useCallback((taskId: string) => {
+    setExpandedTask((prev) => (prev === taskId ? null : taskId));
+  }, []);
+
+  const handleGenerateDescription = useCallback(
+    async (taskId: string) => {
+      setGeneratingTasks((prev) => new Set(prev).add(taskId));
+      try {
+        await generateDescription.mutateAsync(taskId);
+        toast({
+          title: 'Description generated',
+          description: 'AI has analyzed the email and generated a task description',
+        });
+      } catch (error) {
+        toast({
+          title: 'Generation failed',
+          description: 'Could not generate AI description',
+          variant: 'destructive',
+        });
+      } finally {
+        setGeneratingTasks((prev) => {
+          const next = new Set(prev);
+          next.delete(taskId);
+          return next;
+        });
+      }
+    },
+    [generateDescription, toast]
+  );
+
   const handleApprove = useCallback(
-    async (task: PendingTask, listId: string) => {
+    async (task: PendingTask) => {
+      const listId = lists?.[0]?.id;
       if (!listId) {
         toast({
           title: 'Error',
-          description: 'Please select a Trello list',
+          description: 'Please select a Trello board first',
           variant: 'destructive',
         });
         return;
@@ -321,6 +353,7 @@ export default function TasksPage() {
           title: 'Task approved',
           description: `"${task.title}" has been sent to Trello`,
         });
+        setExpandedTask(null);
       } catch (error) {
         toast({
           title: 'Approval failed',
@@ -329,7 +362,7 @@ export default function TasksPage() {
         });
       }
     },
-    [approveTask, selectedBoardId, toast]
+    [approveTask, lists, selectedBoardId, toast]
   );
 
   const handleReject = useCallback(
@@ -340,6 +373,7 @@ export default function TasksPage() {
           title: 'Task rejected',
           description: 'The task has been dismissed',
         });
+        setExpandedTask(null);
       } catch (error) {
         toast({
           title: 'Rejection failed',
@@ -351,33 +385,7 @@ export default function TasksPage() {
     [rejectTask, toast]
   );
 
-  const handleEdit = useCallback(
-    async (taskId: string, updates: Partial<PendingTask>) => {
-      try {
-        await updateTask.mutateAsync({
-          taskId,
-          updates: {
-            title: updates.title,
-            description: updates.description,
-            priority: updates.priority,
-          },
-        });
-        toast({
-          title: 'Task updated',
-          description: 'Changes saved successfully',
-        });
-      } catch (error) {
-        toast({
-          title: 'Update failed',
-          description: 'Could not save changes',
-          variant: 'destructive',
-        });
-      }
-    },
-    [updateTask, toast]
-  );
-
-  const handleApproveAll = async () => {
+  const handleApproveSelected = async () => {
     if (!selectedBoardId || !lists || lists.length === 0) {
       toast({
         title: 'Error',
@@ -387,13 +395,11 @@ export default function TasksPage() {
       return;
     }
 
-    if (!pendingTasks || pendingTasks.length === 0) {
-      return;
-    }
+    if (selectedTasks.size === 0) return;
 
     try {
       const result = await approveTasksBulk.mutateAsync({
-        taskIds: pendingTasks.map((t) => t.id),
+        taskIds: Array.from(selectedTasks),
         listId: lists[0].id,
         boardId: selectedBoardId,
       });
@@ -402,6 +408,7 @@ export default function TasksPage() {
         title: 'Tasks approved',
         description: `${result.approved} tasks sent to Trello`,
       });
+      setSelectedTasks(new Set());
     } catch (error) {
       toast({
         title: 'Bulk approval failed',
@@ -411,17 +418,16 @@ export default function TasksPage() {
     }
   };
 
-  const handleRejectAll = async () => {
-    if (!pendingTasks || pendingTasks.length === 0) {
-      return;
-    }
+  const handleRejectSelected = async () => {
+    if (selectedTasks.size === 0) return;
 
     try {
-      const result = await rejectTasksBulk.mutateAsync(pendingTasks.map((t) => t.id));
+      const result = await rejectTasksBulk.mutateAsync(Array.from(selectedTasks));
       toast({
         title: 'Tasks rejected',
         description: `${result.rejected} tasks dismissed`,
       });
+      setSelectedTasks(new Set());
     } catch (error) {
       toast({
         title: 'Bulk rejection failed',
@@ -433,20 +439,14 @@ export default function TasksPage() {
 
   if (tasksLoading || boardsLoading) {
     return (
-      <div className="space-y-8">
+      <div className="space-y-4">
         <div className="space-y-1">
-          <h1 className="text-4xl font-bold text-blue-600 dark:text-white tracking-tight">
-            Task Approval Queue
-          </h1>
-          <p className="text-slate-600 dark:text-white/50 text-base">
-            Review AI-extracted tasks before sending to Trello
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Inbox</h1>
+          <p className="text-slate-500 dark:text-white/50 text-sm">
+            Review emails and approve tasks
           </p>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-64 rounded-xl" />
-          ))}
-        </div>
+        <Skeleton className="h-96 rounded-lg" />
       </div>
     );
   }
@@ -454,142 +454,118 @@ export default function TasksPage() {
   const tasksCount = pendingTasks?.length || 0;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="space-y-1">
-          <h1 className="text-4xl font-bold text-blue-600 dark:text-white tracking-tight">
-            Task Approval Queue
-          </h1>
-          <p className="text-slate-600 dark:text-white/50 text-base">
-            Review AI-extracted tasks before sending to Trello
-          </p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-sm">
-            <Badge className="bg-yellow-100 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-400">
-              <Clock className="w-3 h-3 mr-1" />
-              {stats?.pending || 0} pending
-            </Badge>
-            <Badge className="bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400">
-              <CheckCircle2 className="w-3 h-3 mr-1" />
-              {stats?.approved || 0} approved
-            </Badge>
-            <Badge className="bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400">
-              <XCircle className="w-3 h-3 mr-1" />
-              {stats?.rejected || 0} rejected
-            </Badge>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Inbox</h1>
+          <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-white/50">
+            <span>{stats?.pending || 0} pending</span>
+            <span>•</span>
+            <span>{stats?.approved || 0} approved</span>
+            <span>•</span>
+            <span>{stats?.rejected || 0} rejected</span>
           </div>
         </div>
+
+        {/* Board selector */}
+        <Select value={selectedBoardId} onValueChange={setSelectedBoardId}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Select Trello board" />
+          </SelectTrigger>
+          <SelectContent>
+            {boards?.map((board) => (
+              <SelectItem key={board.id} value={board.id}>
+                {board.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* Bulk actions bar */}
+      {/* Toolbar */}
       {tasksCount > 0 && (
-        <Card className="border-2 border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-black/50">
-          <CardContent className="py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-medium text-slate-700 dark:text-white/70">
-                  Default Trello destination:
-                </span>
-                <Select value={selectedBoardId} onValueChange={setSelectedBoardId}>
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="Select board" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {boards?.map((board) => (
-                      <SelectItem key={board.id} value={board.id}>
-                        {board.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {selectedBoardId && lists && lists.length > 0 && (
-                  <>
-                    <ArrowRight className="w-4 h-4 text-slate-400" />
-                    <span className="text-sm text-slate-500 dark:text-white/50">
-                      {lists[0].name}
-                    </span>
-                  </>
+        <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-white/5 rounded-lg">
+          <input
+            type="checkbox"
+            checked={selectedTasks.size === tasksCount && tasksCount > 0}
+            onChange={handleSelectAll}
+            className="w-4 h-4 rounded border-slate-300 dark:border-white/20"
+          />
+          <span className="text-sm text-slate-600 dark:text-white/60 ml-2">
+            {selectedTasks.size > 0 ? `${selectedTasks.size} selected` : 'Select all'}
+          </span>
+
+          {selectedTasks.size > 0 && (
+            <>
+              <div className="h-4 w-px bg-slate-300 dark:bg-white/20 mx-2" />
+              <Button
+                size="sm"
+                onClick={handleApproveSelected}
+                disabled={approveTasksBulk.isPending || !selectedBoardId}
+                className="bg-green-600 hover:bg-green-700 text-white gap-1"
+              >
+                {approveTasksBulk.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4" />
                 )}
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRejectAll}
-                  disabled={rejectTasksBulk.isPending}
-                  className="text-red-600"
-                >
-                  {rejectTasksBulk.isPending ? (
-                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                  ) : (
-                    <XCircle className="w-4 h-4 mr-1" />
-                  )}
-                  Reject All
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleApproveAll}
-                  disabled={approveTasksBulk.isPending || !selectedBoardId || !lists?.length}
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                >
-                  {approveTasksBulk.isPending ? (
-                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="w-4 h-4 mr-1" />
-                  )}
-                  Approve All
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                Approve
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRejectSelected}
+                disabled={rejectTasksBulk.isPending}
+                className="text-red-600 gap-1"
+              >
+                {rejectTasksBulk.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <XCircle className="w-4 h-4" />
+                )}
+                Reject
+              </Button>
+            </>
+          )}
+        </div>
       )}
 
-      {/* Tasks grid */}
+      {/* Task list - Gmail style */}
       {tasksCount > 0 ? (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-800 dark:text-white">
-              Pending Approval ({tasksCount})
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-            {pendingTasks?.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                boards={boards}
-                lists={lists}
-                selectedBoardId={selectedBoardId}
-                onBoardChange={setSelectedBoardId}
-                onApprove={handleApprove}
-                onReject={handleReject}
-                onEdit={handleEdit}
-                isProcessing={approveTask.isPending}
-              />
-            ))}
-          </div>
+        <div className="bg-white dark:bg-black border border-slate-200 dark:border-white/10 rounded-lg overflow-hidden">
+          {pendingTasks?.map((task) => (
+            <TaskRow
+              key={task.id}
+              task={task}
+              isSelected={selectedTasks.has(task.id)}
+              isExpanded={expandedTask === task.id}
+              onSelect={handleSelect}
+              onExpand={handleExpand}
+              onApprove={handleApprove}
+              onReject={handleReject}
+              onGenerateDescription={handleGenerateDescription}
+              isGenerating={generatingTasks.has(task.id)}
+              selectedListId={lists?.[0]?.id || ''}
+            />
+          ))}
         </div>
       ) : (
-        <Card className="border-2 border-dashed border-slate-300 dark:border-white/10 bg-slate-50/50 dark:bg-black/30">
-          <CardContent className="py-16">
-            <div className="text-center space-y-4">
-              <div className="w-16 h-16 mx-auto rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center">
-                <Inbox className="w-8 h-8 text-slate-400 dark:text-white/30" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-slate-700 dark:text-white/70">
-                  No tasks pending approval
-                </h3>
-                <p className="text-sm text-slate-500 dark:text-white/50 mt-1">
-                  Process emails from the Automation page to extract tasks
-                </p>
-              </div>
+        <div className="bg-white dark:bg-black border border-slate-200 dark:border-white/10 rounded-lg p-16">
+          <div className="text-center space-y-4">
+            <div className="w-16 h-16 mx-auto rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center">
+              <Inbox className="w-8 h-8 text-slate-400 dark:text-white/30" />
             </div>
-          </CardContent>
-        </Card>
+            <div>
+              <h3 className="text-lg font-semibold text-slate-700 dark:text-white/70">
+                Your inbox is empty
+              </h3>
+              <p className="text-sm text-slate-500 dark:text-white/50 mt-1">
+                Process emails from the Automation page to extract tasks
+              </p>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

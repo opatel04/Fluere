@@ -98,14 +98,14 @@ export function useTask(id: string) {
         
         // Backend task routes are currently stubs
         if (response.data.data.task) {
-          const task = response.data.data.task;
+          const task = response.data.data.task as any;
           return {
             ...task,
             client_id: task.client_id || task.clientId,
             due_date: task.due_date || task.dueDate,
             created_at: task.created_at || task.createdAt,
             updated_at: task.updated_at || task.updatedAt,
-          };
+          } as Task;
         }
         
         throw new Error('Task not found');
@@ -233,8 +233,10 @@ export interface PendingTask {
   email_subject?: string;
   email_from?: string;
   email_date?: string;
+  client_id?: string; // Auto-detected client from email sender
   title: string;
   description?: string;
+  snippet?: string; // Email snippet for preview (no AI needed)
   priority: 'low' | 'medium' | 'high' | 'urgent';
   category?: string;
   due_date?: string;
@@ -242,6 +244,7 @@ export interface PendingTask {
   labels: string[];
   confidence?: number;
   extraction_source: 'automation' | 'manual';
+  ai_processed?: boolean; // true after AI generates description
   status: 'pending' | 'approved' | 'rejected';
   approved_at?: string;
   rejected_at?: string;
@@ -459,6 +462,23 @@ export function useDeletePendingTask() {
   return useMutation({
     mutationFn: async (taskId: string) => {
       await apiClient.delete(`/tasks/pending/${taskId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] });
+    },
+  });
+}
+
+/**
+ * Generate AI description for a pending task (lazy loading)
+ */
+export function useGenerateTaskDescription() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (taskId: string) => {
+      const response = await apiClient.post<PendingTaskResponse>(`/tasks/pending/${taskId}/generate`);
+      return response.data.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pending-tasks'] });

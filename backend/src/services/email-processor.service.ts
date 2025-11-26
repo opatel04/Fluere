@@ -3,6 +3,7 @@ import trelloService from './trello.service';
 import aiService from './ai.service';
 import taskIntelligenceService from './task-intelligence.service';
 import boardAutomationService from './board-automation.service';
+import ClientService from './client.service';
 import db from '../config/database';
 import logger from '../config/logger';
 import { ExtractedTask, ProcessingOptions } from '../types/ai.types';
@@ -19,6 +20,11 @@ import { ExtractedTask, ProcessingOptions } from '../types/ai.types';
  * 5. Create Trello cards from extracted tasks
  */
 class EmailProcessorService {
+  private clientService: ClientService;
+
+  constructor() {
+    this.clientService = new ClientService();
+  }
   /**
    * Process a single email and create Trello cards
    */
@@ -157,18 +163,31 @@ class EmailProcessorService {
         return { success: true, taskSaved: false };
       }
 
-      // Step 3: Detect priority using heuristics (NO AI)
+      // Step 3: Auto-detect or create client from email sender
+      let clientId: string | null = null;
+      try {
+        const { email: senderEmail, name: senderName } = this.extractEmailAndName(email.from);
+        if (senderEmail) {
+          clientId = await this.clientService.findOrCreateClient(userId, senderEmail, senderName);
+          logger.info(`Linked email to client: ${senderEmail} (${clientId})`);
+        }
+      } catch (error) {
+        // Client detection is non-critical - log and continue
+        logger.warn(`Failed to detect/create client for email ${messageId}:`, error);
+      }
+
+      // Step 4: Detect priority using heuristics (NO AI)
       const priority = this.detectPriorityFromEmail(email);
       const labels = this.detectLabelsFromEmail(email);
       const dueDate = this.detectDueDateFromEmail(email);
 
-      // Step 4: Save to pending_tasks (description is NULL - generated on-demand)
+      // Step 5: Save to pending_tasks (description is NULL - generated on-demand)
       const result = await db.query(
         `INSERT INTO pending_tasks (
           user_id, email_id, email_subject, email_from, email_date,
           title, description, snippet, priority, category, due_date,
-          labels, confidence, extraction_source, status, ai_processed
-        ) VALUES ($1, $2, $3, $4, $5, $6, NULL, $7, $8, $9, $10, $11, NULL, 'automation', 'pending', false)
+          labels, confidence, extraction_source, status, ai_processed, client_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, NULL, $7, $8, $9, $10, $11, NULL, 'automation', 'pending', false, $12)
         RETURNING id`,
         [
           userId,
@@ -182,6 +201,7 @@ class EmailProcessorService {
           null, // category set by AI later
           dueDate,
           JSON.stringify(labels),
+          clientId, // Link to detected/created client
         ]
       );
 
@@ -951,6 +971,42 @@ Snippet: ${email.snippet}
       logger.error('Error creating Trello cards:', error);
       throw new Error('Failed to create Trello cards');
     }
+  }
+
+  /**
+   * Extract email address and name from email string
+   * Handles formats like:
+   * - "John Doe <john@example.com>" -> { email: "john@example.com", name: "John Doe" }
+   * - "john@example.com" -> { email: "john@example.com", name: undefined }
+   * - "<john@example.com>" -> { email: "john@example.com", name: undefined }
+   */
+  private extractEmailAndName(emailString: string): { email: string | null; name?: string } {
+    if (!emailString) {
+      return { email: null };
+    }
+
+    // Check for "Name <email@domain.com>" format
+    const match = emailString.match(/^(.+?)\s*<(.+?)>$/);
+    if (match) {
+      const name = match[1].trim().replace(/^["']|["']$/g, ''); // Remove quotes if present
+      const email = match[2].trim();
+      return { email, name: name || undefined };
+    }
+
+    // Check for just "<email@domain.com>" format
+    const emailOnlyMatch = emailString.match(/^<(.+?)>$/);
+    if (emailOnlyMatch) {
+      return { email: emailOnlyMatch[1].trim() };
+    }
+
+    // Assume it's just an email address
+    const cleanEmail = emailString.trim();
+    if (cleanEmail.includes('@')) {
+      return { email: cleanEmail };
+    }
+
+    // Unable to extract a valid email
+    return { email: null };
   }
 }
 
