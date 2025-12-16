@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import apiClient from '../client';
+import apiClient, { aiApiClient } from '../client';
 
 export interface SuggestedTask {
   id: string;
@@ -50,7 +50,7 @@ export function useExtractTasksFromText() {
       context?: 'email' | 'meeting_notes' | 'general_notes' | 'chat';
     }) => {
       try {
-        const response = await apiClient.post<{
+        const response = await aiApiClient.post<{
           success: true;
           data: ExtractTasksResponse;
         }>('/ai/extract-manual', { text, context });

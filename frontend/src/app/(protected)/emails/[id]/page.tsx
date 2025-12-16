@@ -3,7 +3,8 @@
 import { useEmail, useExtractTasks } from '@/lib/api/queries/emails';
 import { useTrelloBoards, useTrelloLists, useProcessToTrello } from '@/lib/api/queries/trello';
 import { useTrelloStatus } from '@/lib/api/queries/oauth';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import { specApi } from '@/lib/api/spec';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -126,6 +127,26 @@ export default function EmailDetailPage() {
     }
   };
 
+  // Spec Generation
+  const [isGeneratingSpec, setIsGeneratingSpec] = useState(false);
+  const router = useRouter();
+
+  const handleGenerateSpec = async () => {
+    if (!email?.id) return;
+
+    setIsGeneratingSpec(true);
+    try {
+      const result = await specApi.generateSpec(email.id);
+      toast.success('Project spec generated successfully!');
+      router.push(`/specs/${result.spec.id}`);
+    } catch (error: any) {
+      console.error('Failed to generate spec:', error);
+      toast.error(error.response?.data?.error?.message || 'Failed to generate spec');
+    } finally {
+      setIsGeneratingSpec(false);
+    }
+  };
+
   const priorityColors: Record<string, string> = {
     high: 'text-red-600 bg-red-50 dark:bg-red-500/10 dark:text-red-400',
     medium: 'text-yellow-600 bg-yellow-50 dark:bg-yellow-500/10 dark:text-yellow-400',
@@ -169,23 +190,44 @@ export default function EmailDetailPage() {
         </Link>
 
         {/* Extract & Process Button */}
-        <Button
-          onClick={handleExtractAndProcess}
-          disabled={extractTasks.isPending}
-          className="bg-blue-600 dark:bg-white text-white dark:text-black hover:bg-blue-700 dark:hover:bg-white/90 font-semibold"
-        >
-          {extractTasks.isPending ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Analyzing...
-            </>
-          ) : (
-            <>
-              <Send className="w-4 h-4 mr-2" />
-              Send to Trello {suggestions.length > 0 ? `(${suggestions.length})` : ''}
-            </>
-          )}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={handleGenerateSpec}
+            disabled={isGeneratingSpec}
+            variant="outline"
+            className="border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-white/20 dark:text-white dark:hover:bg-white/10"
+          >
+            {isGeneratingSpec ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Generating Spec...
+              </>
+            ) : (
+              <>
+                <FileText className="w-4 h-4 mr-2" />
+                Generate Spec
+              </>
+            )}
+          </Button>
+
+          <Button
+            onClick={handleExtractAndProcess}
+            disabled={extractTasks.isPending}
+            className="bg-blue-600 dark:bg-white text-white dark:text-black hover:bg-blue-700 dark:hover:bg-white/90 font-semibold"
+          >
+            {extractTasks.isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Send className="w-4 h-4 mr-2" />
+                Send to Trello {suggestions.length > 0 ? `(${suggestions.length})` : ''}
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Email Card */}
@@ -310,8 +352,8 @@ export default function EmailDetailPage() {
                       !selectedBoardId
                         ? 'Select a board first'
                         : listsLoading
-                        ? 'Loading lists...'
-                        : 'Select a list'
+                          ? 'Loading lists...'
+                          : 'Select a list'
                     }
                   />
                 </SelectTrigger>

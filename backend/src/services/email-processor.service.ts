@@ -4,6 +4,8 @@ import aiService from './ai.service';
 import taskIntelligenceService from './task-intelligence.service';
 import boardAutomationService from './board-automation.service';
 import ClientService from './client.service';
+import scopeCreepService from './scope-creep.service';
+import specService from './spec.service';
 import db from '../config/database';
 import logger from '../config/logger';
 import { ExtractedTask, ProcessingOptions } from '../types/ai.types';
@@ -211,9 +213,9 @@ class EmailProcessorService {
       const emailResult = await db.query(
         `INSERT INTO emails (
           user_id, gmail_id, thread_id, subject, sender, sender_email,
-          received_at, snippet, category, likely_has_task, gmail_link,
+          received_at, snippet, body, category, likely_has_task, gmail_link,
           client_id, processing_status, processed_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'completed', NOW())
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'completed', NOW())
         RETURNING id`,
         [
           userId,
@@ -224,6 +226,7 @@ class EmailProcessorService {
           this.extractEmailAndName(email.from).email,
           email.date,
           snippet,
+          email.body, // Save the full body (HTML preferred)
           category,
           taskDetection.hasTask,
           gmailLink,
@@ -232,6 +235,43 @@ class EmailProcessorService {
       );
 
       const emailId = emailResult.rows[0].id;
+
+      // Step 7.5: Check for Scope Creep (if client identified)
+      if (clientId) {
+        try {
+          // Check for LOCKED specs for this client
+          const specs = await specService.listSpecs(userId);
+          const lockedSpec = specs.find(s => s.client_id === clientId && s.status === 'locked');
+
+          if (lockedSpec) {
+            logger.info(`Checking for scope creep against locked spec: ${lockedSpec.project_name}`);
+
+            // Get full spec content
+            const { content } = await specService.getSpec(lockedSpec.id);
+
+            // Run detection
+            const scopeResult = await aiService.detectScopeCreep(
+              `Subject: ${email.subject}\n\n${email.body || email.snippet}`,
+              content
+            );
+
+            if (scopeResult.isScopeCreep) {
+              logger.warn(`Scope creep detected! Severity: ${scopeResult.severity}`);
+
+              // Create alert
+              await scopeCreepService.createAlert({
+                spec_id: lockedSpec.id,
+                email_id: emailId,
+                client_id: clientId,
+                result: scopeResult
+              });
+            }
+          }
+        } catch (error) {
+          logger.error('Error checking scope creep:', error);
+          // Don't fail the email processing for this
+        }
+      }
 
       // Step 8: Create pending task if ANY indicators found - let user decide!
       let taskId: string | null = null;

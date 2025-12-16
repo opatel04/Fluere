@@ -6,13 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ScrollReveal } from '@/components/ui/scroll-reveal';
 import { HeroGeometric } from '@/components/ui/shape-landing-hero';
 import Link from 'next/link';
-import { 
-  Users, 
-  CheckSquare, 
-  Mail, 
-  Sparkles, 
-  BarChart3, 
-  Shield, 
+import {
+  Users,
+  CheckSquare,
+  Mail,
+  Sparkles,
+  BarChart3,
+  Shield,
   ArrowRight,
   Check,
   Star,
@@ -81,7 +81,7 @@ export default function LandingPage() {
       name: 'Emily Rodriguez',
       role: 'Operations Lead',
       company: 'StartupXYZ',
-      content: 'Best tool we\'ve used for client management. The interface is clean and the features are exactly what we needed.',
+      content: 'Best tool we&apos;ve used for client management. The interface is clean and the features are exactly what we needed.',
       rating: 5,
     },
   ];
@@ -90,9 +90,9 @@ export default function LandingPage() {
     <div className="min-h-screen bg-white dark:bg-black dark:grid-pattern-elegant relative overflow-hidden">
       {/* Subtle animated pattern - only for non-hero sections */}
       <div className="fixed inset-0 animated-pattern pointer-events-none opacity-20 dark:opacity-10" />
-      
+
       <LandingNavbar />
-      
+
       {/* Hero Section */}
       <HeroGeometric
         badge="AI-Powered Task Management"
@@ -167,7 +167,7 @@ export default function LandingPage() {
                   </div>
                   <Quote className="w-6 h-6 text-slate-300 dark:text-white/10 mb-4" />
                   <p className="text-slate-700 dark:text-white/60 mb-6 leading-relaxed">
-                    "{testimonial.content}"
+                    &quot;{testimonial.content}&quot;
                   </p>
                   <div>
                     <p className="font-semibold text-slate-900 dark:text-white">{testimonial.name}</p>
@@ -190,12 +190,12 @@ export default function LandingPage() {
                   About Fluere
                 </h2>
                 <p className="text-lg text-slate-600 dark:text-white/50 mb-6 leading-relaxed">
-                  Fluere is a modern client and task management platform designed to help you stay organized and productive. 
-                  We combine powerful project management tools with AI-powered email analysis to help you extract actionable 
+                  Fluere is a modern client and task management platform designed to help you stay organized and productive.
+                  We combine powerful project management tools with AI-powered email analysis to help you extract actionable
                   tasks from your communications.
                 </p>
                 <p className="text-lg text-slate-600 dark:text-white/50 mb-8 leading-relaxed">
-                  Whether you're managing multiple clients, tracking tasks across projects, or trying to stay on top of 
+                  Whether you&apos;re managing multiple clients, tracking tasks across projects, or trying to stay on top of
                   important emails, Fluere provides the tools you need to work more efficiently.
                 </p>
                 <div className="space-y-3">

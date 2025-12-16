@@ -23,7 +23,7 @@ export default function DashboardPage() {
       <div className="space-y-8">
         <div className="space-y-1">
           <h1 className="text-4xl font-bold text-blue-600 dark:text-white tracking-tight">Dashboard</h1>
-          <p className="text-slate-600 dark:text-white/50 text-base">Welcome back! Here's what's happening today.</p>
+          <p className="text-slate-600 dark:text-white/50 text-base">Welcome back! Here&apos;s what&apos;s happening today.</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {[1, 2, 3].map((i) => (
@@ -42,7 +42,7 @@ export default function DashboardPage() {
         <h1 className="text-4xl font-bold text-blue-600 dark:text-white tracking-tight">
           Dashboard
         </h1>
-        <p className="text-slate-600 dark:text-white/50 text-base">Welcome back! Here's what's happening today.</p>
+        <p className="text-slate-600 dark:text-white/50 text-base">Welcome back! Here&apos;s what&apos;s happening today.</p>
       </div>
 
       {/* Stats Cards */}
@@ -137,8 +137,8 @@ export default function DashboardPage() {
                         <span className={cn(
                           'text-xs font-bold',
                           client.healthScore >= 80 ? 'text-green-600 dark:text-green-400' :
-                          client.healthScore >= 50 ? 'text-yellow-600 dark:text-yellow-400' :
-                          'text-red-600 dark:text-red-400'
+                            client.healthScore >= 50 ? 'text-yellow-600 dark:text-yellow-400' :
+                              'text-red-600 dark:text-red-400'
                         )}>
                           {client.healthScore}%
                         </span>

@@ -1,17 +1,30 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import apiClient from '../client';
+import apiClient, { aiApiClient } from '../client';
 
 export interface Email {
   id: string;
   subject: string;
   body: string;
-  from: string;
-  to: string;
+  // Actual fields from backend
+  sender?: string;
+  sender_email?: string;
+  recipients?: string;
+  // Legacy fields for backwards compatibility
+  from?: string;
+  to?: string;
   date: string;
+  received_at?: string;
   client_id?: string;
-  status: 'unread' | 'read' | 'archived';
+  status?: 'unread' | 'read' | 'archived';
   created_at: string;
   updated_at: string;
+  // Metadata-focused fields
+  snippet?: string;
+  gmail_link?: string;
+  category?: string;
+  likely_has_task?: boolean;
+  processing_status?: string;
+  email_type?: string;
 }
 
 export interface AISuggestion {
@@ -134,7 +147,7 @@ export function useExtractTasks() {
           ? `Subject: ${emailSubject}\n\n${emailBody}`
           : emailBody;
 
-        const response = await apiClient.post<{
+        const response = await aiApiClient.post<{
           success: true;
           data: {
             tasks: Array<{

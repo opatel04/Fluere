@@ -59,6 +59,20 @@ export interface ValidationIssue {
 }
 
 /**
+ * Scope Creep Detection Result
+ */
+export interface ScopeCreepResult {
+  isScopeCreep: boolean;
+  confidence: number; // 0-1
+  severity: 'low' | 'medium' | 'high';
+  category: string; // e.g., "new_deliverable", "exclusion_violation"
+  reasoning: string;
+  estimatedHours?: number;
+  clientQuote?: string; // The specific part of the email that triggered it
+  detectedDeviation?: any; // Structured data about the deviation
+}
+
+/**
  * Email processing options
  */
 export interface ProcessingOptions {

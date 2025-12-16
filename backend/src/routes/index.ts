@@ -15,6 +15,7 @@ import activityRoutes from './activity.routes';
 import clientRoutes from './client.routes';
 import userRoutes from './user.routes';
 import followUpRoutes from './follow-up.routes';
+import specRoutes from './spec.routes';
 
 const router = Router();
 
@@ -35,5 +36,6 @@ router.use('/activity', activityRoutes); // Activity logs and audit trail
 router.use('/clients', clientRoutes); // Freelancer client management (NEW - Pivot Feature)
 router.use('/users', userRoutes); // User account management (GDPR compliance)
 router.use('/follow-ups', followUpRoutes); // Follow-up detection and management
+router.use('/specs', specRoutes); // Project Scope Management
 
 export default router;

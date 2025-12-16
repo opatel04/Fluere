@@ -9,6 +9,7 @@ import {
   useApprovePendingTasksBulk,
   useRejectPendingTasksBulk,
   useGenerateTaskDescription,
+  useGenerateAndApprovePendingTask,
   PendingTask,
 } from '@/lib/api/queries/tasks';
 import { useTrelloBoards, useTrelloLists } from '@/lib/api/queries/trello';
@@ -32,7 +33,10 @@ import {
   Sparkles,
   Mail,
   ExternalLink,
+  FileText,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { specApi } from '@/lib/api/spec';
 
 // Priority badge styles
 const priorityStyles = {
@@ -52,6 +56,8 @@ function TaskRow({
   onApprove,
   onReject,
   onGenerateDescription,
+  onGenerateSpec,
+  onGenerateAndApprove,
   isGenerating,
   selectedListId,
 }: {
@@ -63,6 +69,8 @@ function TaskRow({
   onApprove: (task: PendingTask) => void;
   onReject: (taskId: string) => void;
   onGenerateDescription: (taskId: string) => void;
+  onGenerateSpec: (emailId: string) => void;
+  onGenerateAndApprove: (task: PendingTask) => void;
   isGenerating: boolean;
   selectedListId: string;
 }) {
@@ -219,6 +227,22 @@ function TaskRow({
 
             {/* Actions */}
             <div className="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-white/10">
+              {/* One-Click Workflow: Generate Spec & Approve */}
+              {task.email_id && (
+                <Button
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onGenerateAndApprove(task);
+                  }}
+                  disabled={!selectedListId}
+                  className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white gap-1"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Generate Spec & Approve
+                </Button>
+              )}
+
               <Button
                 size="sm"
                 onClick={(e) => {
@@ -229,7 +253,7 @@ function TaskRow({
                 className="bg-green-600 hover:bg-green-700 text-white gap-1"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                Approve
+                Approve Only
               </Button>
               <Button
                 variant="outline"
@@ -258,14 +282,22 @@ function TaskRow({
                   <ExternalLink className="w-3 h-3" />
                 </Button>
               )}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-slate-500 gap-1"
-              >
-                <Archive className="w-4 h-4" />
-                Archive
-              </Button>
+
+              {/* Separate Generate Spec Button (for flexibility) */}
+              {task.email_id && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onGenerateSpec(task.email_id!);
+                  }}
+                  className="text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-500/10 gap-1 ml-auto"
+                >
+                  <FileText className="w-4 h-4" />
+                  Spec Only
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -276,6 +308,7 @@ function TaskRow({
 
 export default function TasksPage() {
   const { toast } = useToast();
+  const router = useRouter();
 
   // State
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
@@ -292,6 +325,7 @@ export default function TasksPage() {
   const approveTasksBulk = useApprovePendingTasksBulk();
   const rejectTasksBulk = useRejectPendingTasksBulk();
   const generateDescription = useGenerateTaskDescription();
+  const generateAndApprove = useGenerateAndApprovePendingTask();
 
   // Trello data
   const { data: boards, isLoading: boardsLoading } = useTrelloBoards();
@@ -402,6 +436,90 @@ export default function TasksPage() {
       }
     },
     [rejectTask, toast]
+  );
+
+  const handleGenerateSpec = useCallback(
+    async (emailId: string) => {
+      try {
+        toast({
+          title: 'Generating Spec',
+          description: 'AI is analyzing the email to create a project spec...',
+        });
+
+        const result = await specApi.generateSpec(emailId);
+
+        toast({
+          title: 'Spec Generated',
+          description: 'Redirecting to spec viewer...',
+        });
+
+        router.push(`/specs/${result.spec.id}`);
+      } catch (error: any) {
+        console.error('Failed to generate spec:', error);
+        toast({
+          title: 'Generation failed',
+          description: error.response?.data?.error?.message || 'Could not generate spec',
+          variant: 'destructive',
+        });
+      }
+    },
+    [router, toast]
+  );
+
+  const handleGenerateAndApprove = useCallback(
+    async (task: PendingTask) => {
+      const listId = lists?.[0]?.id;
+      if (!listId) {
+        toast({
+          title: 'Error',
+          description: 'Please select a Trello board first',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (!task.email_id) {
+        toast({
+          title: 'Error',
+          description: 'Task must have an associated email to generate spec',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      try {
+        toast({
+          title: 'Processing...',
+          description: 'Generating spec and creating Trello card...',
+        });
+
+        const result = await generateAndApprove.mutateAsync({
+          taskId: task.id,
+          listId,
+          boardId: selectedBoardId,
+        });
+
+        toast({
+          title: 'Success!',
+          description: `Spec created and task approved. Redirecting to spec...`,
+        });
+
+        // Redirect to the spec page
+        if (result.spec?.id) {
+          router.push(`/specs/${result.spec.id}`);
+        }
+
+        setExpandedTask(null);
+      } catch (error: any) {
+        console.error('Generate and approve failed:', error);
+        toast({
+          title: 'Operation failed',
+          description: error.response?.data?.error?.message || 'Could not complete operation',
+          variant: 'destructive',
+        });
+      }
+    },
+    [generateAndApprove, lists, selectedBoardId, toast, router]
   );
 
   const handleApproveSelected = async () => {
@@ -564,6 +682,8 @@ export default function TasksPage() {
               onApprove={handleApprove}
               onReject={handleReject}
               onGenerateDescription={handleGenerateDescription}
+              onGenerateSpec={handleGenerateSpec}
+              onGenerateAndApprove={handleGenerateAndApprove}
               isGenerating={generatingTasks.has(task.id)}
               selectedListId={lists?.[0]?.id || ''}
             />

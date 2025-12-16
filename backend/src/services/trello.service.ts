@@ -725,6 +725,77 @@ class TrelloService {
       throw new Error('Failed to search Trello cards');
     }
   }
+
+  /**
+   * Get or create labels by name
+   */
+  async getOrCreateLabels(
+    userId: string,
+    boardId: string,
+    labelNames: string[]
+  ): Promise<string[]> {
+    try {
+      if (!labelNames || labelNames.length === 0) {
+        return [];
+      }
+
+      // Get existing labels
+      const existingLabels = await this.getLabels(userId, boardId);
+      const labelIds: string[] = [];
+
+      // Trello colors for new labels (cycle through them)
+      const colors = ['green', 'yellow', 'orange', 'red', 'purple', 'blue', 'sky', 'lime', 'pink', 'black'];
+
+      for (let i = 0; i < labelNames.length; i++) {
+        const name = labelNames[i];
+        const existing = existingLabels.find(
+          l => l.name.toLowerCase() === name.toLowerCase()
+        );
+
+        if (existing) {
+          labelIds.push(existing.id);
+        } else {
+          // Create new label
+          const color = colors[i % colors.length];
+          const newLabel = await this.createLabel(userId, boardId, name, color);
+          labelIds.push(newLabel.id);
+        }
+      }
+
+      return labelIds;
+    } catch (error) {
+      logger.error('Error resolving Trello labels:', error);
+      // Don't fail the whole process if label creation fails, just return what we have or empty
+      return [];
+    }
+  }
+
+  /**
+   * Add an attachment to a card (e.g. link or file)
+   */
+  async addAttachment(
+    userId: string,
+    cardId: string,
+    url?: string,
+    name?: string,
+    file?: string // Base64 or binary content could be handled here if needed, but Trello API usually takes URL or file upload
+  ): Promise<any> {
+    try {
+      const client = await this.getClient(userId);
+      const params: any = {};
+
+      if (url) params.url = url;
+      if (name) params.name = name;
+
+      const response = await client.post(`/cards/${cardId}/attachments`, null, { params });
+
+      logger.info(`Added attachment to card ${cardId}`);
+      return response.data;
+    } catch (error) {
+      logger.error('Error adding attachment to Trello card:', error);
+      throw new Error('Failed to add attachment to Trello card');
+    }
+  }
 }
 
 export default new TrelloService();

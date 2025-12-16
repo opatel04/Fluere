@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Users, CheckSquare, Mail, Settings, Zap, Activity, Bell, Server } from 'lucide-react';
+import { Home, Users, CheckSquare, Mail, Settings, Zap, Activity, Bell, Server, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ const navItems = [
   { href: '/follow-ups', label: 'Follow-ups', icon: Bell },
   { href: '/automation', label: 'Automation', icon: Zap },
   { href: '/activity', label: 'Activity', icon: Activity },
+  { href: '/specs', label: 'Specs', icon: FileText },
   { href: '/queue', label: 'Queue', icon: Server },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
@@ -40,8 +41,8 @@ function SidebarContent({ isMobile = false }: SidebarProps) {
               href={item.href}
               className={cn(
                 'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-semibold transition-all duration-200',
-                isActive 
-                  ? 'bg-blue-50 dark:bg-white/10 text-blue-700 dark:text-white shadow-md border-2 border-blue-500 dark:border-white/20' 
+                isActive
+                  ? 'bg-blue-50 dark:bg-white/10 text-blue-700 dark:text-white shadow-md border-2 border-blue-500 dark:border-white/20'
                   : 'text-slate-700 dark:text-white/60 hover:text-blue-700 dark:hover:text-white hover:bg-blue-50/60 dark:hover:bg-white/5'
               )}
             >

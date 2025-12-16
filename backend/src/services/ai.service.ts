@@ -8,7 +8,9 @@ import {
   TaskExtractionResult,
   ValidationResult,
   ProcessingOptions,
+  ScopeCreepResult,
 } from '../types/ai.types';
+import { SpecContent } from '../types/spec.types';
 
 /**
  * AI Service - Layered approach for email task extraction
@@ -564,6 +566,176 @@ JSON Response:`;
     } catch (error) {
       logger.error('Error in generateClientSummary:', error);
       return `Unable to generate summary: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+
+  /**
+   * Generate a structured project spec from email content
+   */
+  async generateProjectSpec(emailContent: string): Promise<SpecContent> {
+    try {
+      const prompt = `You are an expert Project Manager. Create a structured project specification from this email.
+
+Email Content:
+${emailContent}
+
+Extract the following into a JSON object:
+1. project_name: A short, descriptive name for the project
+2. deliverables: List of specific items to be delivered (id, description, status='pending')
+3. specifications: List of technical requirements (id, description)
+4. client_provides: Assets or info the client will provide
+5. timeline: { start_date, delivery_date, milestones: [{date, description}] } - Use ISO dates if possible, or text
+6. budget: { total, terms }
+7. revision_rounds: Number or description of revisions included
+8. exclusions: List of specific items NOT included in scope (id, description)
+9. notes: Any other important context
+
+Rules:
+- Be precise and professional.
+- If a field is missing, leave it empty or null, do not invent information.
+- For deliverables, break them down into clear, actionable items.
+- Generate a unique ID for each item (short string).
+
+JSON Response:`;
+
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a Project Spec Generator. Output valid JSON matching the SpecContent interface.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.2,
+      });
+
+      const response = completion.choices[0].message.content;
+      if (!response) throw new Error('No response from OpenAI');
+
+      const parsed = JSON.parse(response);
+      return parsed as SpecContent;
+    } catch (error) {
+      logger.error('Error generating project spec:', error);
+      throw new Error('Failed to generate project spec');
+    }
+  }
+  /**
+   * Modify an existing project spec based on user instructions
+   */
+  async modifyProjectSpec(currentSpec: SpecContent, instruction: string): Promise<{ content: SpecContent; reply: string }> {
+    try {
+      const prompt = `You are an expert Project Manager. Update the following project specification based on the user's instruction.
+
+Current Spec:
+${JSON.stringify(currentSpec, null, 2)}
+
+User Instruction:
+"${instruction}"
+
+Rules:
+1. Update ONLY the fields relevant to the instruction.
+2. Maintain the existing structure and data for unchanged fields.
+3. If adding items (deliverables, specs, exclusions), generate a unique ID for them.
+4. Return a JSON object with two fields:
+   - "content": The fully updated SpecContent object.
+   - "reply": A brief, friendly message explaining what you changed (e.g., "I've added the login page to the deliverables.").
+
+JSON Response:`;
+
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a Project Spec Editor. Output valid JSON containing the updated content and a reply.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.2,
+      });
+
+      const response = completion.choices[0].message.content;
+      if (!response) throw new Error('No response from OpenAI');
+
+      const parsed = JSON.parse(response);
+      return {
+        content: parsed.content as SpecContent,
+        reply: parsed.reply as string
+      };
+    } catch (error) {
+      logger.error('Error modifying project spec:', error);
+      throw new Error('Failed to modify project spec');
+    }
+  }
+  /**
+   * Detect scope creep by comparing email request against locked spec
+   */
+  async detectScopeCreep(emailContent: string, specContent: SpecContent): Promise<ScopeCreepResult> {
+    try {
+      const prompt = `You are an expert Project Manager detecting scope creep.
+Compare the client's email request against the locked project specification.
+
+Locked Spec:
+${JSON.stringify(specContent, null, 2)}
+
+Client Email:
+${emailContent}
+
+Analyze if the email contains any requests that are OUTSIDE the scope of the locked spec.
+Look for:
+1. New deliverables not in the original list.
+2. Changes to existing deliverables that increase effort.
+3. Requests for items explicitly listed in "exclusions".
+4. Timeline changes that compress the schedule.
+
+Respond with JSON:
+{
+  "isScopeCreep": boolean,
+  "confidence": number (0-1),
+  "severity": "low" | "medium" | "high",
+  "category": "new_deliverable" | "exclusion_violation" | "timeline_change" | "modification" | "other",
+  "reasoning": string (explanation for the project manager),
+  "clientQuote": string (quote from email triggering this),
+  "estimatedHours": number (rough estimate of extra work, null if unknown),
+  "detectedDeviation": {
+    "type": string,
+    "description": string
+  }
+}
+
+If no scope creep is detected, set isScopeCreep to false.`;
+
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a Scope Creep Detector. Output valid JSON.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.2,
+      });
+
+      const response = completion.choices[0].message.content;
+      if (!response) throw new Error('No response from OpenAI');
+
+      const parsed = JSON.parse(response);
+      return parsed as ScopeCreepResult;
+    } catch (error) {
+      logger.error('Error detecting scope creep:', error);
+      // Fail safe - assume no scope creep on error to avoid spam
+      return {
+        isScopeCreep: false,
+        confidence: 0,
+        severity: 'low',
+        category: 'error',
+        reasoning: 'Failed to analyze scope creep',
+      };
     }
   }
 }

@@ -419,8 +419,25 @@ class GmailService {
         }
 
         if (parts.parts) {
+          // First try to find HTML part
           for (const part of parts.parts) {
-            if (part.mimeType === 'text/plain' || part.mimeType === 'text/html') {
+            if (part.mimeType === 'text/html') {
+              const partBody = extractBody(part);
+              if (partBody) return partBody;
+            }
+          }
+
+          // If no HTML found, look for plain text
+          for (const part of parts.parts) {
+            if (part.mimeType === 'text/plain') {
+              const partBody = extractBody(part);
+              if (partBody) return partBody;
+            }
+          }
+
+          // If neither found, recurse into multipart/alternative or mixed
+          for (const part of parts.parts) {
+            if (part.mimeType.startsWith('multipart/')) {
               const partBody = extractBody(part);
               if (partBody) return partBody;
             }

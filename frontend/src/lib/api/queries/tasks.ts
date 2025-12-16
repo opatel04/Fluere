@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import apiClient from '../client';
+import apiClient, { aiApiClient } from '../client';
 
 export interface Task {
   id: string;
@@ -283,6 +283,25 @@ interface PendingTaskResponse {
   data: PendingTask | { message: string; task: PendingTask; card?: any };
 }
 
+interface GenerateAndApproveResponse {
+  success: true;
+  data: {
+    message: string;
+    task: PendingTask;
+    spec: {
+      id: string;
+      project_name: string;
+      status: string;
+      trello_card_id: string;
+    };
+    card: {
+      id: string;
+      name: string;
+      url: string;
+    };
+  };
+}
+
 interface BulkApproveResponse {
   success: true;
   data: {
@@ -361,6 +380,28 @@ export function useApprovePendingTask() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pending-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['trello'] });
+    },
+  });
+}
+
+/**
+ * Generate spec and approve task in one action (One-Click Workflow)
+ */
+export function useGenerateAndApprovePendingTask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ taskId, listId, boardId }: { taskId: string; listId: string; boardId?: string }) => {
+      const response = await aiApiClient.post<GenerateAndApproveResponse>(`/tasks/pending/${taskId}/generate-and-approve`, {
+        listId,
+        boardId,
+      });
+      return response.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['trello'] });
+      queryClient.invalidateQueries({ queryKey: ['specs'] });
     },
   });
 }
@@ -478,7 +519,7 @@ export function useGenerateTaskDescription() {
 
   return useMutation({
     mutationFn: async (taskId: string) => {
-      const response = await apiClient.post<PendingTaskResponse>(`/tasks/pending/${taskId}/generate`);
+      const response = await aiApiClient.post<PendingTaskResponse>(`/tasks/pending/${taskId}/generate`);
       return response.data.data;
     },
     onSuccess: () => {

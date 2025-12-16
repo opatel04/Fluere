@@ -4,13 +4,15 @@ import { useClient, useClientTasks, useClientEmails, useClientHeatmap, useClient
 import { useParams } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Mail, ExternalLink } from 'lucide-react';
-import { TaskCard } from '@/app/(protected)/tasks/page';
+import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ActivityHeatmap } from '@/components/clients/activity-heatmap';
 import { ClientSummary } from '@/components/clients/client-summary';
+import { ClientTimeline } from '@/components/clients/client-timeline';
+import { PreviewModal } from '@/components/clients/preview-modal';
+import { useState } from 'react';
+import { Email, Task } from '@/lib/api/types';
 
 export default function ClientPage() {
   const params = useParams();
@@ -20,6 +22,35 @@ export default function ClientPage() {
   const { data: emails, isLoading: emailsLoading } = useClientEmails(clientId);
   const { data: heatmapData, isLoading: heatmapLoading } = useClientHeatmap(clientId);
   const { data: summaryData, isLoading: summaryLoading } = useClientSummary(clientId);
+
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+
+  const handleViewEmail = (emailId: string) => {
+    const email = emails?.find((e) => e.id === emailId);
+    if (email) {
+      setSelectedEmail(email);
+      setSelectedTask(null);
+      setPreviewOpen(true);
+    }
+  };
+
+  const handleViewTask = (taskId: string) => {
+    const task = tasks?.find((t) => t.id === taskId);
+    if (task) {
+      setSelectedTask(task);
+      setSelectedEmail(null);
+      setPreviewOpen(true);
+    }
+  };
+
+  const handleViewThread = (item: any) => {
+    // For now, just show the first email in the thread
+    if (item.email) {
+      handleViewEmail(item.email.id);
+    }
+  };
 
   if (clientLoading) {
     return (
@@ -124,78 +155,41 @@ export default function ClientPage() {
           </div>
         </section>
 
-        {/* Tasks Section */}
-        {(tasksLoading || (tasks && tasks.length > 0)) && (
-          <section className="space-y-4">
-            {tasksLoading ? (
-              <div className="space-y-4">
-                <Skeleton className="h-32 w-full" />
-                <Skeleton className="h-32 w-full" />
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {tasks.map((task) => (
-                  <TaskCard key={task.id} task={task} clientName={client.name} />
-                ))}
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* Emails Section */}
+        {/* Timeline Section */}
         <section className="space-y-4">
-          {emailsLoading ? (
-            <div className="space-y-4">
-              <Skeleton className="h-24 w-full" />
-              <Skeleton className="h-24 w-full" />
-            </div>
-          ) : emails && emails.length > 0 ? (
-            <div className="space-y-4">
-              {emails.map((email) => {
-                const date = new Date(email.date);
-                const isValidDate = !isNaN(date.getTime());
-                const dateStr = isValidDate ? date.toLocaleDateString() : 'Unknown date';
-                const timeStr = isValidDate ? date.toLocaleTimeString() : '';
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-slate-800 dark:text-white">Activity Timeline</h2>
+          </div>
 
-                return (
-                  <div key={email.id} className="bg-white/90 backdrop-blur-sm dark:bg-black border-2 border-blue-500 dark:border-white/10 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex justify-between items-start gap-4">
-                      <div className="space-y-1">
-                        <h3 className="font-semibold text-slate-800 dark:text-white">{email.subject}</h3>
-                        <p className="text-sm text-slate-500 dark:text-white/50">
-                          {dateStr} {timeStr && `• ${timeStr}`}
-                        </p>
-                        <p className="text-sm text-slate-600 dark:text-white/70 line-clamp-2 mt-2">
-                          {(email.body || '').replace(/<[^>]+>/g, '').substring(0, 200)}...
-                        </p>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="shrink-0 gap-2"
-                        onClick={() => window.open(`https://mail.google.com/mail/u/0/#inbox/${email.id}`, '_blank')}
-                      >
-                        <Mail className="w-4 h-4" />
-                        View in Gmail
-                        <ExternalLink className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
+          {tasksLoading || emailsLoading ? (
+            <div className="space-y-4">
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full" />
             </div>
           ) : (
-            <div className="bg-white/90 backdrop-blur-sm dark:bg-black border-2 border-blue-500 dark:border-white/10 rounded-xl p-8 shadow-lg">
-              <div className="flex items-center justify-center py-12 border-2 border-dashed border-blue-300 dark:border-white/10 rounded-lg bg-blue-50/30 dark:bg-transparent">
-                <div className="text-center space-y-2">
-                  <p className="text-slate-600 dark:text-white/40 text-sm font-medium">No emails yet</p>
-                  <p className="text-slate-500 dark:text-white/30 text-xs">Emails for this client will appear here</p>
-                </div>
-              </div>
-            </div>
+            <ClientTimeline
+              emails={emails || []}
+              tasks={tasks || []}
+              onViewEmail={handleViewEmail}
+              onViewTask={handleViewTask}
+              onViewThread={handleViewThread}
+            />
           )}
         </section>
       </div>
+
+      {/* Preview Modal */}
+      <PreviewModal
+        open={previewOpen}
+        onClose={() => {
+          setPreviewOpen(false);
+          setSelectedEmail(null);
+          setSelectedTask(null);
+        }}
+        email={selectedEmail}
+        task={selectedTask}
+      />
     </div>
   );
 }

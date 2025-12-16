@@ -262,7 +262,7 @@ export default function FollowUpsPage() {
           <div className="flex items-center justify-center py-12 border-2 border-dashed border-blue-300 dark:border-white/10 rounded-lg bg-blue-50/30 dark:bg-transparent">
             <div className="text-center space-y-2">
               <p className="text-slate-600 dark:text-white/40 text-sm font-medium">No follow-ups found</p>
-              <p className="text-slate-500 dark:text-white/30 text-xs">Click "Detect Follow-ups" to find emails that need responses</p>
+              <p className="text-slate-500 dark:text-white/30 text-xs">Click &quot;Detect Follow-ups&quot; to find emails that need responses</p>
             </div>
           </div>
         </div>

@@ -183,7 +183,7 @@ export const useClientHeatmap = (clientId: string) => {
   return useQuery({
     queryKey: ['client-heatmap', clientId],
     queryFn: async () => {
-      const response = await apiClient.get<{ date: string; count: number }[]>(`/clients/${clientId}/heatmap`);
+      const response = await apiClient.get<{ success: boolean; data: { date: string; count: number }[] }>(`/clients/${clientId}/heatmap`);
       return response.data.data;
     },
     enabled: !!clientId,
@@ -194,7 +194,7 @@ export const useClientSummary = (clientId: string) => {
   return useQuery({
     queryKey: ['client-summary', clientId],
     queryFn: async () => {
-      const response = await apiClient.get<{ summary: string }>(`/clients/${clientId}/summary`);
+      const response = await apiClient.get<{ success: boolean; data: { summary: string } }>(`/clients/${clientId}/summary`);
       return response.data.data;
     },
     staleTime: 1000 * 60 * 5, // Cache summary for 5 minutes
