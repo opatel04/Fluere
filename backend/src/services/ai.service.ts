@@ -672,48 +672,165 @@ JSON Response:`;
   }
   /**
    * Detect scope creep by comparing email request against locked spec
+   * Now returns an array of detections to handle multiple scope creep items per email
    */
   async detectScopeCreep(emailContent: string, specContent: SpecContent): Promise<ScopeCreepResult> {
     try {
-      const prompt = `You are an expert Project Manager detecting scope creep.
-Compare the client's email request against the locked project specification.
+      const prompt = `You are an expert Project Manager detecting scope creep in client emails.
 
-Locked Spec:
+LOCKED PROJECT SPECIFICATION:
 ${JSON.stringify(specContent, null, 2)}
 
-Client Email:
+CLIENT EMAIL:
 ${emailContent}
 
-Analyze if the email contains any requests that are OUTSIDE the scope of the locked spec.
-Look for:
-1. New deliverables not in the original list.
-2. Changes to existing deliverables that increase effort.
-3. Requests for items explicitly listed in "exclusions".
-4. Timeline changes that compress the schedule.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Respond with JSON:
+CRITICAL: DISTINGUISH BETWEEN QUESTIONS AND REQUESTS
+
+⚠️ DO NOT FLAG AS SCOPE CREEP:
+- Questions asking WHAT IS INCLUDED: "will you be writing tests?", "are you handling retries?"
+- Clarifications about EXISTING deliverables: "when you document errors, will that include root cause?"
+- Questions about METHODOLOGY: "will it be unit or integration tests?"
+- Requests for INFORMATION: "can you explain how X works?"
+
+✅ ONLY FLAG AS SCOPE CREEP:
+- Direct REQUESTS for new work: "could we add monitoring?", "it would be helpful if you also built..."
+- SUGGESTIONS for additional features: "we should also include...", "would be nice to have..."
+- IMPLIED EXPECTATIONS of unlisted work: "I'm assuming this includes dashboard access"
+- Politely phrased ADDITIONS: "while you're in there, maybe you could also..."
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DETECTION RULES:
+
+1. NEW DELIVERABLE - Something completely absent from the spec
+   Example: Spec has "fix errors", email asks for "admin dashboard"
+
+2. EXCLUSION VIOLATION - Requesting something explicitly excluded
+   Example: Spec excludes "mobile app", email asks for "iOS version"
+
+3. SPEC EXPANSION - Adding complexity/work to existing items
+   Example: Spec has "document errors", email asks for "interactive troubleshooting guide with videos"
+
+4. ASSUMED INCLUSION - Expecting unlisted features without agreement
+   Example: Email says "when you deploy the monitoring dashboard..." but spec has no monitoring
+
+5. REVISION ABUSE - Exceeding agreed revision limits
+   Example: Spec allows "2 revision rounds", this is the 5th revision request
+
+6. TIMELINE CHANGE - Compression without scope reduction
+   Example: Spec says "4 weeks", email asks for "can we get this in 2 weeks?"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SEVERITY CALIBRATION (BE STRICT):
+
+🔴 HIGH SEVERITY (16+ hours):
+- Major new features/systems (dashboards, monitoring systems, entire new modules)
+- Fundamental architecture changes
+- Work requiring new technologies/integrations
+- MUST impact timeline significantly
+
+🟡 MEDIUM SEVERITY (6-15 hours):
+- Moderate feature additions (email alerts, enhanced reports)
+- Significant expansions of existing features
+- New integrations or API connections
+- Additional documentation systems
+
+🟢 LOW SEVERITY (1-5 hours):
+- Minor enhancements (adding a field, small UI tweak)
+- Additional examples or basic documentation
+- Simple configuration additions
+- Quick wins that are adjacent to existing work
+
+⚪ NOT SCOPE CREEP (0 hours):
+- Clarification questions about existing deliverables
+- Asking what's included in current scope
+- Bug reports or quality issues with delivered work
+- Questions about methodology or approach
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+HOUR ESTIMATION GUIDELINES (BE REALISTIC):
+
+For EACH detection, estimate hours considering:
+
+1. ANALYSIS & PLANNING (10-20% of total)
+   - Understanding requirements
+   - Researching approach
+   - Planning implementation
+
+2. IMPLEMENTATION (50-60% of total)
+   - Writing code
+   - Building features
+   - Integration work
+
+3. TESTING (15-20% of total)
+   - Writing tests
+   - Manual testing
+   - Fixing issues found
+
+4. DOCUMENTATION (5-10% of total)
+   - Code comments
+   - User documentation
+   - Deployment notes
+
+5. DEPLOYMENT & REVIEW (5-10% of total)
+   - Code review
+   - Deployment
+   - Verification
+
+EXAMPLES OF HOUR ESTIMATES:
+
+- "Add FAQ section to docs" = 3-4 hours (LOW)
+  Analysis: 0.5h, Writing: 2h, Review: 0.5h, Formatting: 1h
+
+- "Email notification system" = 8-10 hours (MEDIUM)
+  Design: 1h, Email templates: 2h, Integration: 3h, Testing: 2h, Config: 1h, Docs: 1h
+
+- "Admin dashboard with metrics" = 20-24 hours (HIGH)
+  Design: 2h, Backend API: 6h, Frontend UI: 8h, Charts: 4h, Testing: 3h, Docs: 1h
+
+- "Basic monitoring for Redis" = 10-12 hours (MEDIUM)
+  Research: 1h, Metrics collection: 4h, Alerting: 3h, Dashboard: 2h, Testing: 1h, Docs: 1h
+
+- "Load testing implementation" = 12-15 hours (MEDIUM)
+  Setup: 2h, Script creation: 4h, Test scenarios: 3h, Running tests: 2h, Analysis: 2h, Report: 2h
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ANALYZE EACH SENTENCE in the email independently. Return ALL scope creep items as an ARRAY.
+
+OUTPUT FORMAT (JSON):
 {
-  "isScopeCreep": boolean,
-  "confidence": number (0-1),
-  "severity": "low" | "medium" | "high",
-  "category": "new_deliverable" | "exclusion_violation" | "timeline_change" | "modification" | "other",
-  "reasoning": string (explanation for the project manager),
-  "clientQuote": string (quote from email triggering this),
-  "estimatedHours": number (rough estimate of extra work, null if unknown),
-  "detectedDeviation": {
-    "type": string,
-    "description": string
-  }
+  "hasScopeCreep": boolean,
+  "overallConfidence": number (0-1, how confident are you in this detection?),
+  "detections": [
+    {
+      "severity": "low" | "medium" | "high",
+      "category": "new_deliverable" | "exclusion_violation" | "timeline_change" | "spec_expansion" | "assumed_inclusion" | "revision_abuse" | "other",
+      "reasoning": "Clear explanation WHY this is out of scope and not just a question",
+      "clientQuote": "EXACT quote from email showing the scope creep",
+      "estimatedHours": number (justified estimate with breakdown if needed),
+      "detectedDeviation": {
+        "type": "Brief category name",
+        "description": "Clear description of what they want added",
+        "relatedSpecItem": "Which spec item this relates to, or 'none' if completely new"
+      }
+    }
+  ],
+  "summary": "Optional: Overall assessment if multiple items found"
 }
 
-If no scope creep is detected, set isScopeCreep to false.`;
+If NO scope creep detected, return: { "hasScopeCreep": false, "overallConfidence": 0.95, "detections": [] }`;
 
       const completion = await this.openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [
           {
             role: 'system',
-            content: 'You are a Scope Creep Detector. Output valid JSON.',
+            content: 'You are a Scope Creep Detector. Output valid JSON with an array of all detected scope creep items.',
           },
           { role: 'user', content: prompt },
         ],
@@ -724,18 +841,130 @@ If no scope creep is detected, set isScopeCreep to false.`;
       const response = completion.choices[0].message.content;
       if (!response) throw new Error('No response from OpenAI');
 
-      const parsed = JSON.parse(response);
-      return parsed as ScopeCreepResult;
+      const result = JSON.parse(response) as ScopeCreepResult;
+
+      // Validate structure
+      if (!result.detections || !Array.isArray(result.detections)) {
+        logger.warn('AI returned invalid structure, detections is not an array. Defaulting to empty array.');
+        result.detections = [];
+      }
+
+      // Set hasScopeCreep based on detections array
+      result.hasScopeCreep = result.detections.length > 0;
+
+      // Backwards compatibility: populate deprecated fields from first detection
+      if (result.detections.length > 0) {
+        const firstDetection = result.detections[0];
+        result.isScopeCreep = true;
+        result.confidence = result.overallConfidence;
+        result.severity = firstDetection.severity;
+        result.category = firstDetection.category;
+        result.reasoning = firstDetection.reasoning;
+        result.clientQuote = firstDetection.clientQuote;
+        result.estimatedHours = firstDetection.estimatedHours;
+        result.detectedDeviation = firstDetection.detectedDeviation;
+      } else {
+        result.isScopeCreep = false;
+        result.confidence = result.overallConfidence;
+      }
+
+      logger.info(
+        `Scope creep detection complete: ${result.detections.length} item(s) found`,
+        { hasScopeCreep: result.hasScopeCreep, categories: result.detections.map(d => d.category) }
+      );
+
+      return result;
     } catch (error) {
       logger.error('Error detecting scope creep:', error);
       // Fail safe - assume no scope creep on error to avoid spam
       return {
+        hasScopeCreep: false,
+        overallConfidence: 0,
+        detections: [],
+        // Backwards compatibility
         isScopeCreep: false,
         confidence: 0,
         severity: 'low',
         category: 'error',
         reasoning: 'Failed to analyze scope creep',
       };
+    }
+  }
+
+  /**
+   * Generate professional email response for scope creep alert
+   */
+  async generateScopeCreepResponse(
+    alert: any,
+    tone: 'friendly' | 'professional' | 'firm',
+    clientName: string,
+    projectName: string
+  ): Promise<string> {
+    try {
+      const toneInstructions = {
+        friendly: 'warm, collaborative, and solution-oriented. Use friendly language while staying professional. Emphasize partnership and finding solutions together.',
+        professional: 'neutral, clear, and business-like. Maintain professional boundaries while being respectful. Present clear options without being overly warm or cold.',
+        firm: 'direct, assertive, and boundary-setting. Be polite but very clear about scope boundaries. State requirements without ambiguity while remaining respectful.',
+      };
+
+      const prompt = `You are a professional freelance developer writing an email response to a client about a scope creep issue.
+
+**Project:** ${projectName}
+**Client Name:** ${clientName}
+
+**Scope Creep Alert:**
+- **Severity:** ${alert.severity}
+- **Category:** ${alert.category}
+- **Client's Request:** "${alert.client_quote}"
+- **Why It's Out of Scope:** ${alert.ai_reasoning}
+- **Estimated Extra Work:** ${alert.estimated_hours || 'Unknown'} hours
+
+**Tone:** ${tone.toUpperCase()} - Write in a ${toneInstructions[tone]}
+
+**Your Task:**
+Write a professional email response that:
+1. Acknowledges their request positively and thanks them for sharing it
+2. Explains why this is outside the current project scope (reference what was agreed upon)
+3. Offers a solution based on tone:
+   - Friendly: "I'd be happy to add this! Based on the work involved, I estimate around ${alert.estimated_hours} hours. Want me to send over a quick quote?"
+   - Professional: "This would require additional work beyond our current agreement. I can provide options: add it to the current project for an additional fee, include it in a future phase, or handle it as a separate project."
+   - Firm: "This falls outside our current contract which specified [reference to original scope]. This would require a separate agreement and additional billing at ${alert.estimated_hours} hours."
+4. Keep it concise - aim for 3-4 short paragraphs
+5. End on a collaborative, positive note
+
+**Format Requirements:**
+- Do NOT include a subject line
+- Start with an appropriate greeting using ${clientName}
+- Use proper paragraph spacing
+- Sign off appropriately (use "Best regards," or similar)
+- Use a friendly, human tone (not robotic or overly formal)
+
+Generate the email body now:`;
+
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a professional freelance developer with excellent communication skills. Write clear, respectful emails that set boundaries while maintaining good client relationships.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.7, // Higher for more natural, varied language
+      });
+
+      const response = completion.choices[0].message.content;
+      if (!response) throw new Error('No response from OpenAI');
+
+      logger.info(`Generated ${tone} response for scope creep alert`, {
+        alertSeverity: alert.severity,
+        estimatedHours: alert.estimated_hours,
+      });
+
+      return response;
+    } catch (error) {
+      logger.error('Error generating scope creep response:', error);
+      throw new Error('Failed to generate response');
     }
   }
 }

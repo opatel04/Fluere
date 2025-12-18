@@ -2,7 +2,6 @@ import db from '../config/database';
 import logger from '../config/logger';
 import { ProjectSpec, SpecVersion, CreateSpecDTO, UpdateSpecDTO, SpecContent } from '../types/spec.types';
 import trelloService from './trello.service';
-import { v4 as uuidv4 } from 'uuid';
 
 class SpecService {
     /**
@@ -148,6 +147,13 @@ class SpecService {
                 throw new Error('Spec must be locked before syncing to Trello');
             }
 
+            // Get the spec content for card creation
+            const versionResult = await client.query(
+                `SELECT content FROM spec_versions WHERE spec_id = $1 AND version_number = $2`,
+                [specId, spec.current_version]
+            );
+            const content = versionResult.rows[0]?.content;
+
             // Try to find linked card via multiple methods
             let cardId = spec.trello_card_id;
 
@@ -181,25 +187,167 @@ class SpecService {
                 }
             }
 
-            if (cardId) {
-                // Find or create "Spec Locked" label
-                // We need the board ID for this. If we don't have it, we might need to fetch the card first.
-                // For now, let's assume we can add a label by name if the service supports it, 
-                // or we just add a comment. Adding a label is safer via ID.
+            // If still no card found, create a new one
+            if (!cardId) {
+                logger.info(`No existing Trello card found for spec ${specId}, creating new card`);
 
-                // Let's add a comment for now as it's safer without board ID
-                await trelloService.addComment(spec.user_id, cardId, "🔒 **Project Specification Locked**\n\nThe spec has been approved and locked. Any further changes will be tracked as scope creep.");
-                logger.info(`Added lock comment to Trello card ${cardId}`);
-            } else {
-                logger.warn(`No Trello card found for spec ${specId}, skipping sync`);
-                throw new Error('No linked Trello card found');
+                // Get user's boards
+                const boards = await trelloService.getBoards(spec.user_id);
+                if (boards.length === 0) {
+                    throw new Error('No Trello boards found. Please create a board first.');
+                }
+
+                // Use the first board (or you could add logic to select a specific board)
+                const board = boards[0];
+                logger.info(`Using Trello board: ${board.name} (${board.id})`);
+
+                // Get or create "Specs" list
+                const lists = await trelloService.getLists(spec.user_id, board.id);
+                let targetList = lists.find(list => list.name.toLowerCase() === 'specs' || list.name.toLowerCase() === 'specifications');
+
+                // If no "Specs" list, use the first list
+                if (!targetList && lists.length > 0) {
+                    targetList = lists[0];
+                    logger.info(`No 'Specs' list found, using list: ${targetList.name}`);
+                }
+
+                if (!targetList) {
+                    throw new Error('No lists found on the Trello board. Please create a list first.');
+                }
+
+                // Create card description from spec content
+                const description = this.formatSpecForTrelloCard(content);
+
+                // Prepare due date if available
+                const dueDate = content.timeline?.delivery_date
+                    ? new Date(content.timeline.delivery_date).toISOString()
+                    : undefined;
+
+                // Create the card with due date
+                const newCard = await trelloService.createCard(spec.user_id, {
+                    name: `📋 ${spec.project_name} - Specification`,
+                    desc: description,
+                    idList: targetList.id,
+                    pos: 'top',
+                    due: dueDate
+                });
+
+                cardId = newCard.id;
+
+                // Add checklists for deliverables and specifications
+                if (content.deliverables && content.deliverables.length > 0) {
+                    const deliverablesChecklist = await trelloService.createChecklist(
+                        spec.user_id,
+                        cardId,
+                        '✅ Deliverables'
+                    );
+
+                    const deliverableItems = content.deliverables.map((d: any) => ({
+                        name: d.description,
+                        checked: false
+                    }));
+
+                    await trelloService.addChecklistItems(
+                        spec.user_id,
+                        deliverablesChecklist.id,
+                        deliverableItems
+                    );
+                    logger.info(`Added ${deliverableItems.length} deliverables to checklist`);
+                }
+
+                if (content.specifications && content.specifications.length > 0) {
+                    const specsChecklist = await trelloService.createChecklist(
+                        spec.user_id,
+                        cardId,
+                        '⚙️ Technical Specifications'
+                    );
+
+                    const specItems = content.specifications.map((s: any) => ({
+                        name: s.description,
+                        checked: false
+                    }));
+
+                    await trelloService.addChecklistItems(
+                        spec.user_id,
+                        specsChecklist.id,
+                        specItems
+                    );
+                    logger.info(`Added ${specItems.length} specifications to checklist`);
+                }
+
+                // Save card ID to spec
+                await client.query(
+                    `UPDATE project_specs SET trello_card_id = $1, trello_board_id = $2 WHERE id = $3`,
+                    [cardId, board.id, specId]
+                );
+
+                logger.info(`Created new Trello card ${cardId} for spec ${specId} with checklists`);
             }
+
+            // Add lock comment to the card
+            await trelloService.addComment(
+                spec.user_id,
+                cardId,
+                "🔒 **Project Specification Locked**\n\nThe spec has been approved and locked. Any further changes will be tracked as scope creep."
+            );
+            logger.info(`Added lock comment to Trello card ${cardId}`);
         } catch (error) {
             logger.error('Error syncing spec to Trello:', error);
             throw error;
         } finally {
             client.release();
         }
+    }
+
+    /**
+     * Format spec content for Trello card description
+     */
+    private formatSpecForTrelloCard(content: any): string {
+        if (!content) return 'Project Specification';
+
+        let description = '## Project Specification\n\n';
+
+        // Deliverables
+        if (content.deliverables && content.deliverables.length > 0) {
+            description += '### Deliverables\n';
+            content.deliverables.forEach((item: any) => {
+                description += `- ${item.description}\n`;
+            });
+            description += '\n';
+        }
+
+        // Technical Specs
+        if (content.specifications && content.specifications.length > 0) {
+            description += '### Technical Specifications\n';
+            content.specifications.forEach((item: any) => {
+                description += `- ${item.description}\n`;
+            });
+            description += '\n';
+        }
+
+        // Timeline
+        if (content.timeline) {
+            description += '### Timeline\n';
+            if (content.timeline.start_date) description += `- Start: ${content.timeline.start_date}\n`;
+            if (content.timeline.delivery_date) description += `- Delivery: ${content.timeline.delivery_date}\n`;
+            description += '\n';
+        }
+
+        // Budget
+        if (content.budget?.total) {
+            description += `### Budget\n${content.budget.total}\n\n`;
+        }
+
+        // Exclusions
+        if (content.exclusions && content.exclusions.length > 0) {
+            description += '### ❌ Exclusions\n';
+            content.exclusions.forEach((item: any) => {
+                const text = typeof item === 'string' ? item : item.description;
+                description += `- ${text}\n`;
+            });
+        }
+
+        return description;
     }
 
     /**

@@ -796,6 +796,75 @@ class TrelloService {
       throw new Error('Failed to add attachment to Trello card');
     }
   }
+
+  /**
+   * Create a checklist on a card
+   */
+  async createChecklist(
+    userId: string,
+    cardId: string,
+    name: string
+  ): Promise<{ id: string; name: string }> {
+    try {
+      const client = await this.getClient(userId);
+
+      const response = await client.post(`/cards/${cardId}/checklists`, null, {
+        params: { name },
+      });
+
+      logger.info(`Created checklist "${name}" on card ${cardId}`);
+      return response.data;
+    } catch (error) {
+      logger.error('Error creating Trello checklist:', error);
+      throw new Error('Failed to create Trello checklist');
+    }
+  }
+
+  /**
+   * Add an item to a checklist
+   */
+  async addChecklistItem(
+    userId: string,
+    checklistId: string,
+    name: string,
+    checked: boolean = false
+  ): Promise<any> {
+    try {
+      const client = await this.getClient(userId);
+
+      const response = await client.post(`/checklists/${checklistId}/checkItems`, null, {
+        params: {
+          name,
+          checked: checked.toString(),
+        },
+      });
+
+      logger.info(`Added item "${name}" to checklist ${checklistId}`);
+      return response.data;
+    } catch (error) {
+      logger.error('Error adding checklist item:', error);
+      throw new Error('Failed to add checklist item');
+    }
+  }
+
+  /**
+   * Add multiple items to a checklist at once
+   */
+  async addChecklistItems(
+    userId: string,
+    checklistId: string,
+    items: Array<{ name: string; checked?: boolean }>
+  ): Promise<void> {
+    try {
+      for (const item of items) {
+        await this.addChecklistItem(userId, checklistId, item.name, item.checked || false);
+      }
+      logger.info(`Added ${items.length} items to checklist ${checklistId}`);
+    } catch (error) {
+      logger.error('Error adding multiple checklist items:', error);
+      throw new Error('Failed to add checklist items');
+    }
+  }
 }
 
 export default new TrelloService();
