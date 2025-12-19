@@ -57,8 +57,8 @@ class SchedulerService {
   }
 
   /**
-   * Set up daily summary generator (runs every day at 8:00 AM)
-   * Generates and sends morning briefings to users
+   * Set up daily summary generator (runs every hour)
+   * Checks which users should receive their summary based on timezone and preferred time
    */
   private async setupDailySummaryGenerator(): Promise<void> {
     try {
@@ -68,19 +68,19 @@ class SchedulerService {
         await dailySummaryQueue.removeRepeatableByKey(job.key);
       }
 
-      // Add repeating job: every day at 8:00 AM UTC
-      // Users can customize their timezone in preferences
+      // Add repeating job: every hour
+      // Worker will check which users should receive their summary at this hour
       await dailySummaryQueue.add(
         {},
         {
           repeat: {
-            cron: '0 8 * * *', // Every day at 8:00 AM UTC
+            cron: '0 * * * *', // Every hour at minute 0
           },
           jobId: 'daily-summary-scheduled',
         }
       );
 
-      logger.info('Daily summary generator scheduled: every day at 8:00 AM UTC');
+      logger.info('Daily summary generator scheduled: runs every hour, checks user timezones');
     } catch (error) {
       logger.error('Failed to setup daily summary generator:', error);
       throw error;

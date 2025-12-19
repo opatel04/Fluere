@@ -9,7 +9,8 @@ import { ChatInterface } from '@/components/specs/ChatInterface';
 import { ScopeCreepAlerts } from '@/components/specs/ScopeCreepAlerts';
 import { LockSummaryDialog } from '@/components/specs/LockSummaryDialog';
 import { VersionHistoryDialog } from '@/components/specs/VersionHistoryDialog';
-import { Loader2, MessageSquare, ChevronRight, PanelRightClose, PanelRightOpen, History } from 'lucide-react';
+import VersionComparisonDialog from '@/components/specs/VersionComparisonDialog';
+import { Loader2, MessageSquare, ChevronRight, PanelRightClose, PanelRightOpen, History, GitCompare } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
 
@@ -27,31 +28,103 @@ export default function SpecPage() {
     const [isChatOpen, setIsChatOpen] = useState(true);
     const [showLockDialog, setShowLockDialog] = useState(false);
     const [showVersionHistory, setShowVersionHistory] = useState(false);
+    const [showVersionComparison, setShowVersionComparison] = useState(false);
+    const [versions, setVersions] = useState<any[]>([]);
     const [isLocking, setIsLocking] = useState(false);
     const [contentUpdated, setContentUpdated] = useState(false);
 
-    useEffect(() => {
-        const fetchSpec = async () => {
-            try {
-                const data = await specApi.getSpec(id);
-                setSpec(data.spec);
-                setContent(data.content);
-            } catch (error) {
-                console.error('Error fetching spec:', error);
-                toast({
-                    title: 'Error',
-                    description: 'Failed to load project specification.',
-                    variant: 'destructive',
-                });
-            } finally {
-                setLoading(false);
-            }
-        };
+    const fetchSpec = async () => {
+        try {
+            const data = await specApi.getSpec(id);
+            setSpec(data.spec);
+            setContent(data.content);
+        } catch (error) {
+            console.error('Error fetching spec:', error);
+            toast({
+                title: 'Error',
+                description: 'Failed to load project specification.',
+                variant: 'destructive',
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
 
+    const fetchVersions = async () => {
+        try {
+            const versionHistory = await specApi.getVersions(id);
+            setVersions(versionHistory);
+        } catch (error) {
+            console.error('Error fetching versions:', error);
+        }
+    };
+
+    useEffect(() => {
         if (id) {
             fetchSpec();
+            fetchVersions();
         }
     }, [id, toast]);
+
+    const handleSpecUpdatedFromAlert = async () => {
+        try {
+            const data = await specApi.getSpec(id);
+
+            // Detect new items by comparing with previous content
+            const newIds = new Set<string>();
+            if (content) {
+                // Compare deliverables
+                const oldDeliverableIds = new Set((content.deliverables || []).map(d => d.id));
+                (data.content.deliverables || []).forEach((d: any) => {
+                    if (!oldDeliverableIds.has(d.id)) {
+                        newIds.add(d.id);
+                    }
+                });
+
+                // Compare specifications
+                const oldSpecIds = new Set((content.specifications || []).map(s => s.id));
+                (data.content.specifications || []).forEach((s: any) => {
+                    if (!oldSpecIds.has(s.id)) {
+                        newIds.add(s.id);
+                    }
+                });
+
+                // Compare exclusions
+                const oldExclusionIds = new Set((content.exclusions || []).map(e => typeof e === 'string' ? e : e.id));
+                (data.content.exclusions || []).forEach((e: any) => {
+                    const eId = typeof e === 'string' ? e : e.id;
+                    if (!oldExclusionIds.has(eId)) {
+                        newIds.add(eId);
+                    }
+                });
+            }
+
+            setPreviousContent(content);
+            setSpec(data.spec);
+            setContent(data.content);
+            setNewItemIds(newIds);
+
+            // Trigger update animation
+            setContentUpdated(true);
+            setTimeout(() => {
+                setContentUpdated(false);
+                // Clear new item highlights after 10 seconds
+                setTimeout(() => setNewItemIds(new Set()), 10000);
+            }, 2000);
+
+            toast({
+                title: 'Spec Updated',
+                description: 'The specification has been updated with the scope change.',
+            });
+        } catch (error) {
+            console.error('Error refreshing spec:', error);
+            toast({
+                title: 'Error',
+                description: 'Failed to refresh the specification.',
+                variant: 'destructive',
+            });
+        }
+    };
 
     const handleSendMessage = async (message: string) => {
         setProcessing(true);
@@ -208,6 +281,16 @@ export default function SpecPage() {
                             <History className="w-3.5 h-3.5" />
                             History
                         </button>
+                        {versions.length > 1 && (
+                            <button
+                                onClick={() => setShowVersionComparison(true)}
+                                className="px-3 py-1.5 text-slate-600 dark:text-slate-400 text-xs font-medium rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5"
+                                title="Compare versions"
+                            >
+                                <GitCompare className="w-3.5 h-3.5" />
+                                Compare
+                            </button>
+                        )}
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -242,7 +325,10 @@ export default function SpecPage() {
                     >
                         <div className="h-full overflow-y-auto">
                             <div className="px-6 pt-4">
-                                <ScopeCreepAlerts specId={Array.isArray(params.id) ? params.id[0] : params.id} />
+                                <ScopeCreepAlerts
+                                    specId={Array.isArray(params.id) ? params.id[0] : params.id}
+                                    onSpecUpdated={handleSpecUpdatedFromAlert}
+                                />
                             </div>
                             <SpecViewer
                                 key={spec?.updated_at || 'initial'}
@@ -275,7 +361,12 @@ export default function SpecPage() {
                                 <PanelRightClose className="w-5 h-5 text-slate-600 dark:text-slate-400" />
                             </button>
 
-                            <ChatInterface onSendMessage={handleSendMessage} isProcessing={processing} />
+                            <ChatInterface
+                                onSendMessage={handleSendMessage}
+                                isProcessing={processing}
+                                disabled={spec?.status === 'locked'}
+                                disabledMessage="This spec is locked and cannot be edited. Unlock it first to make changes."
+                            />
                         </div>
                     </motion.div>
                 )}
@@ -316,6 +407,16 @@ export default function SpecPage() {
                     onOpenChange={setShowVersionHistory}
                     specId={id}
                     currentVersion={spec.current_version}
+                />
+            )}
+
+            {/* Version Comparison Dialog */}
+            {versions.length > 1 && (
+                <VersionComparisonDialog
+                    isOpen={showVersionComparison}
+                    onClose={() => setShowVersionComparison(false)}
+                    specId={id}
+                    versions={versions}
                 />
             )}
         </div>

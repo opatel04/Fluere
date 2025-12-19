@@ -14,9 +14,11 @@ interface Message {
 interface ChatInterfaceProps {
     onSendMessage: (message: string) => Promise<string | void>;
     isProcessing: boolean;
+    disabled?: boolean;
+    disabledMessage?: string;
 }
 
-export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onSendMessage, isProcessing }) => {
+export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onSendMessage, isProcessing, disabled = false, disabledMessage }) => {
     const [input, setInput] = useState('');
     const scrollRef = useRef<HTMLDivElement>(null);
     const [messages, setMessages] = useState<Message[]>([
@@ -35,7 +37,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onSendMessage, isP
     }, [messages, isProcessing]);
 
     const handleSend = async () => {
-        if (!input.trim() || isProcessing) return;
+        if (!input.trim() || isProcessing || disabled) return;
 
         const userMsg: Message = {
             id: Date.now().toString(),
@@ -115,28 +117,38 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ onSendMessage, isP
 
             {/* Input */}
             <div className="p-4 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800">
-                <div className="relative">
-                    <Input
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                        placeholder="Ask to make changes..."
-                        disabled={isProcessing}
-                        className="pr-10 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 focus-visible:ring-purple-500"
-                    />
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        className="absolute right-1 top-1 h-8 w-8 p-0 hover:bg-transparent text-slate-400 hover:text-purple-600 disabled:opacity-50"
-                        onClick={handleSend}
-                        disabled={isProcessing || !input.trim()}
-                    >
-                        <Send className="h-4 w-4" />
-                    </Button>
-                </div>
-                <p className="text-[10px] text-slate-400 text-center mt-2">
-                    AI can make mistakes. Review generated specs.
-                </p>
+                {disabled && disabledMessage ? (
+                    <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                        <p className="text-xs text-amber-700 dark:text-amber-400 text-center">
+                            🔒 {disabledMessage}
+                        </p>
+                    </div>
+                ) : (
+                    <>
+                        <div className="relative">
+                            <Input
+                                value={input}
+                                onChange={(e) => setInput(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                                placeholder="Ask to make changes..."
+                                disabled={isProcessing || disabled}
+                                className="pr-10 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 focus-visible:ring-purple-500"
+                            />
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                className="absolute right-1 top-1 h-8 w-8 p-0 hover:bg-transparent text-slate-400 hover:text-purple-600 disabled:opacity-50"
+                                onClick={handleSend}
+                                disabled={isProcessing || !input.trim() || disabled}
+                            >
+                                <Send className="h-4 w-4" />
+                            </Button>
+                        </div>
+                        <p className="text-[10px] text-slate-400 text-center mt-2">
+                            AI can make mistakes. Review generated specs.
+                        </p>
+                    </>
+                )}
             </div>
         </div>
     );

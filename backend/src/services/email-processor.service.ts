@@ -255,16 +255,24 @@ class EmailProcessorService {
               content
             );
 
-            if (scopeResult.isScopeCreep) {
-              logger.warn(`Scope creep detected! Severity: ${scopeResult.severity}`);
+            if (scopeResult.hasScopeCreep && scopeResult.detections.length > 0) {
+              logger.warn(
+                `Scope creep detected! ${scopeResult.detections.length} item(s) found`,
+                { categories: scopeResult.detections.map(d => d.category) }
+              );
 
-              // Create alert
-              await scopeCreepService.createAlert({
+              // Create alerts (one per detection)
+              const alerts = await scopeCreepService.createAlerts({
                 spec_id: lockedSpec.id,
                 email_id: emailId,
                 client_id: clientId,
                 result: scopeResult
               });
+
+              logger.info(
+                `Created ${alerts.length} scope creep alert(s) for email`,
+                { emailId, severities: alerts.map(a => a.severity) }
+              );
             }
           }
         } catch (error) {

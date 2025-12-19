@@ -71,4 +71,19 @@ export const specApi = {
         );
         return response.data.data;
     },
+
+    generateAlertResponse: async (alertId: string, tone: 'friendly' | 'professional' | 'firm') => {
+        const response = await aiApiClient.post<{ success: boolean; data: { response: string } }>(
+            `/specs/alerts/${alertId}/generate-response`,
+            { tone }
+        );
+        return response.data.data.response;
+    },
+
+    compareVersions: async (specId: string, version1: number, version2: number) => {
+        const response = await api.get<{ success: boolean; data: any }>(
+            `/specs/${specId}/versions/compare?v1=${version1}&v2=${version2}`
+        );
+        return response.data.data;
+    },
 };

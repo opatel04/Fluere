@@ -272,6 +272,120 @@ class UserService {
     const result = await query(sql, [userId]);
     return result.rows[0] || null;
   }
+
+  /**
+   * Get user notification preferences
+   */
+  async getPreferences(userId: string): Promise<any> {
+    try {
+      let preferences = await this.getUserPreferences(userId);
+
+      // Create default preferences if they don't exist
+      if (!preferences) {
+        const sql = `
+          INSERT INTO user_preferences (user_id)
+          VALUES ($1)
+          RETURNING *
+        `;
+        const result = await query(sql, [userId]);
+        preferences = result.rows[0];
+      }
+
+      return preferences;
+    } catch (error) {
+      logger.error('Failed to get user preferences:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update user notification preferences
+   */
+  async updatePreferences(userId: string, data: any): Promise<any> {
+    try {
+      // Get or create preferences first
+      let preferences = await this.getUserPreferences(userId);
+
+      if (!preferences) {
+        const sql = `
+          INSERT INTO user_preferences (user_id)
+          VALUES ($1)
+          RETURNING *
+        `;
+        const result = await query(sql, [userId]);
+        preferences = result.rows[0];
+      }
+
+      // Build update query dynamically
+      const updates: string[] = [];
+      const values: any[] = [userId];
+      let paramCount = 2;
+
+      const allowedFields = [
+        'daily_summary_enabled',
+        'daily_summary_time',
+        'daily_summary_timezone',
+        'weekly_report_enabled',
+        'follow_up_notifications_enabled',
+        'follow_up_threshold_days',
+        'sentiment_analysis_enabled',
+        'auto_process_emails',
+        'notification_enabled',
+      ];
+
+      for (const field of allowedFields) {
+        if (data[field] !== undefined) {
+          updates.push(`${field} = $${paramCount++}`);
+          values.push(data[field]);
+        }
+      }
+
+      if (updates.length === 0) {
+        return preferences;
+      }
+
+      updates.push(`updated_at = NOW()`);
+
+      const sql = `
+        UPDATE user_preferences
+        SET ${updates.join(', ')}
+        WHERE user_id = $1
+        RETURNING *
+      `;
+
+      const result = await query(sql, values);
+
+      // Log the activity
+      await activityLogService.logActivity({
+        userId,
+        action: 'preferences_updated',
+        resourceType: 'user_preferences',
+        resourceId: userId,
+        actionDetails: { updates: Object.keys(data) },
+      });
+
+      logger.info(`User preferences updated: ${userId}`);
+      return result.rows[0];
+    } catch (error) {
+      logger.error('Failed to update user preferences:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send test daily summary email (force=true to bypass duplicate check)
+   */
+  async sendTestDailySummary(userId: string): Promise<void> {
+    try {
+      const SummaryService = (await import('./summary.service')).default;
+      const summaryService = new SummaryService();
+      await summaryService.generateDailySummary(userId, true); // force=true
+      logger.info(`Test daily summary sent for user ${userId}`);
+    } catch (error) {
+      logger.error('Failed to send test daily summary:', error);
+      throw error;
+    }
+  }
 }
 
 // Export singleton instance

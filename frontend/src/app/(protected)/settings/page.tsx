@@ -63,12 +63,12 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle>Preferences</CardTitle>
               <CardDescription>
-                Customize your TaskSnap experience
+                Customize your Fluere experience
               </CardDescription>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Preferences coming soon...
+                Additional preferences coming soon...
               </p>
             </CardContent>
           </Card>

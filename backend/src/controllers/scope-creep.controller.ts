@@ -46,6 +46,49 @@ class ScopeCreepController {
             });
         }
     }
+
+    /**
+     * Generate email response for an alert
+     */
+    async generateResponse(req: Request, res: Response) {
+        try {
+            const { id } = req.params;
+            const { tone } = req.body;
+
+            // Validate tone
+            const validTones = ['friendly', 'professional', 'firm'];
+            if (!tone || !validTones.includes(tone)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Invalid tone. Must be: friendly, professional, or firm'
+                });
+            }
+
+            logger.info(`Generating ${tone} response for alert ${id}`);
+
+            const response = await scopeCreepService.generateResponseForAlert(id, tone);
+
+            return res.json({
+                success: true,
+                data: { response }
+            });
+        } catch (error: any) {
+            logger.error('Error generating response:', error);
+
+            // Check if it's a "not found" error
+            if (error.message === 'Alert not found') {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Alert not found'
+                });
+            }
+
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to generate response'
+            });
+        }
+    }
 }
 
 export default new ScopeCreepController();

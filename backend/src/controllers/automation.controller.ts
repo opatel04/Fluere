@@ -35,11 +35,10 @@ export const processInbox = asyncHandler(async (req: Request, res: Response): Pr
     throw new UnprocessableError('Gmail not connected. Please connect your Gmail account first.');
   }
 
-  // Fetch unread emails from Gmail (all tabs: Primary, Promotions, Social, Updates)
+  // Fetch all emails marked as Important by Gmail (read or unread)
   const emails = await gmailService.fetchEmails(userId, {
     maxResults: maxEmails,
-    query: 'is:unread',
-    // Don't filter by labelIds to get emails from all tabs
+    query: 'is:important',
   });
 
   if (emails.messages.length === 0) {

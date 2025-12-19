@@ -370,6 +370,275 @@ class SpecService {
         );
         return result.rows;
     }
+
+    /**
+     * Compare two spec versions side-by-side
+     * Returns detailed diff showing additions, deletions, and modifications
+     */
+    async compareVersions(specId: string, version1: number, version2: number) {
+        try {
+            // Validate versions exist
+            const versionsResult = await db.query(
+                `SELECT version_number, content, created_at, change_summary, created_by
+                 FROM spec_versions
+                 WHERE spec_id = $1 AND version_number IN ($2, $3)
+                 ORDER BY version_number ASC`,
+                [specId, version1, version2]
+            );
+
+            if (versionsResult.rows.length !== 2) {
+                throw new Error('One or both versions not found');
+            }
+
+            const [v1Data, v2Data] = version1 < version2
+                ? versionsResult.rows
+                : [versionsResult.rows[1], versionsResult.rows[0]];
+
+            const v1Content = v1Data.content as SpecContent;
+            const v2Content = v2Data.content as SpecContent;
+
+            // Debug logging for notes field
+            console.log('v1Content.notes type:', typeof v1Content.notes);
+            console.log('v1Content.notes value:', v1Content.notes);
+            console.log('v1Content.notes isArray:', Array.isArray(v1Content.notes));
+            console.log('v2Content.notes type:', typeof v2Content.notes);
+            console.log('v2Content.notes value:', v2Content.notes);
+            console.log('v2Content.notes isArray:', Array.isArray(v2Content.notes));
+
+            // Build comprehensive diff
+            const diff = {
+                metadata: {
+                    specId,
+                    version1: {
+                        number: v1Data.version_number,
+                        createdAt: v1Data.created_at,
+                        createdBy: v1Data.created_by,
+                        changeSummary: v1Data.change_summary
+                    },
+                    version2: {
+                        number: v2Data.version_number,
+                        createdAt: v2Data.created_at,
+                        createdBy: v2Data.created_by,
+                        changeSummary: v2Data.change_summary
+                    }
+                },
+                changes: {
+                    deliverables: this.compareArrayField(v1Content.deliverables, v2Content.deliverables),
+                    specifications: this.compareArrayField(v1Content.specifications, v2Content.specifications),
+                    exclusions: this.compareArrayField(v1Content.exclusions, v2Content.exclusions),
+                    timeline: this.compareObjectField(v1Content.timeline, v2Content.timeline),
+                    budget: this.compareObjectField(v1Content.budget, v2Content.budget),
+                    notes: this.compareArrayField(v1Content.notes, v2Content.notes)
+                },
+                summary: {
+                    totalChanges: 0,
+                    addedItems: 0,
+                    removedItems: 0,
+                    modifiedItems: 0
+                }
+            };
+
+            // Calculate summary statistics
+            for (const field of Object.values(diff.changes)) {
+                if (field && typeof field === 'object' && 'changeType' in field) {
+                    if (field.changeType !== 'unchanged') {
+                        diff.summary.totalChanges++;
+                    }
+                    // Check for array-type fields (deliverables, specifications, etc.)
+                    if ('added' in field && Array.isArray(field.added)) {
+                        diff.summary.addedItems += field.added.length;
+                    }
+                    if ('removed' in field && Array.isArray(field.removed)) {
+                        diff.summary.removedItems += field.removed.length;
+                    }
+                    if ('modified' in field && Array.isArray(field.modified)) {
+                        diff.summary.modifiedItems += field.modified.length;
+                    }
+                    // Check for object-type fields (timeline, budget)
+                    if (field.changeType === 'added' && !('added' in field)) {
+                        diff.summary.addedItems++;
+                    }
+                    if (field.changeType === 'removed' && !('removed' in field)) {
+                        diff.summary.removedItems++;
+                    }
+                }
+            }
+
+            logger.info(`Compared versions ${version1} and ${version2} for spec ${specId}`);
+            return diff;
+        } catch (error) {
+            logger.error('Error comparing spec versions:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Compare array fields (deliverables, specifications, exclusions, notes)
+     */
+    private compareArrayField(oldArray: any[] = [], newArray: any[] = []) {
+        // Ensure we have arrays to work with (and handle all edge cases)
+        let oldArr: any[] = [];
+        let newArr: any[] = [];
+
+        // Helper to normalize any value to an array
+        const normalizeToArray = (value: any): any[] => {
+            // If null or undefined, return empty array
+            if (value === null || value === undefined) {
+                return [];
+            }
+
+            // If already an array, check if it's an array of single characters
+            if (Array.isArray(value)) {
+                // If it's an array of single-character strings, it was likely
+                // incorrectly stored by spreading a string. Join them back together.
+
+                // Check if all items are single-character strings
+                const nonMatchingItems = value.filter((item: any, idx: number) => {
+                    const isMatch = typeof item === 'string' && item.length === 1;
+                    return !isMatch;
+                });
+
+                const isCharArray = value.length > 0 && nonMatchingItems.length === 0;
+
+                console.log('Array check:', {
+                    length: value.length,
+                    firstItem: value[0],
+                    firstItemType: typeof value[0],
+                    firstItemLength: typeof value[0] === 'string' ? value[0].length : 'N/A',
+                    nonMatchingCount: nonMatchingItems.length,
+                    nonMatchingSample: nonMatchingItems.slice(0, 3),
+                    isCharArray
+                });
+
+                if (isCharArray) {
+                    console.log('Detected character array, joining back to string');
+                    return [value.join('')];
+                }
+                return value;
+            }
+
+            // If it's a string, wrap it in an array (don't spread it!)
+            if (typeof value === 'string') {
+                return value ? [value] : [];
+            }
+
+            // For any other type, wrap in array
+            return [value];
+        };
+
+        oldArr = normalizeToArray(oldArray);
+        newArr = normalizeToArray(newArray);
+
+        console.log('After normalization:');
+        console.log('oldArr:', oldArr);
+        console.log('newArr:', newArr);
+
+        const added: any[] = [];
+        const removed: any[] = [];
+        const modified: any[] = [];
+        const unchanged: any[] = [];
+
+        // Create maps for efficient lookup
+        const oldMap = new Map();
+        const newMap = new Map();
+
+        // Generate a stable key for any item type
+        const getItemKey = (item: any): string => {
+            if (typeof item === 'string') return item;
+            if (item.id) return item.id;
+            if (item.description) return item.description;
+            // For complex objects, use JSON string as key
+            return JSON.stringify(item);
+        };
+
+        // Handle arrays of objects with IDs or strings
+        oldArr.forEach(item => {
+            const key = getItemKey(item);
+            oldMap.set(key, item);
+        });
+
+        newArr.forEach(item => {
+            const key = getItemKey(item);
+            newMap.set(key, item);
+        });
+
+        // Find removed items
+        oldMap.forEach((item, key) => {
+            if (!newMap.has(key)) {
+                removed.push(item);
+            }
+        });
+
+        // Find added and modified items
+        newMap.forEach((newItem, key) => {
+            if (!oldMap.has(key)) {
+                added.push(newItem);
+            } else {
+                const oldItem = oldMap.get(key);
+                // Check if item was modified (for objects, compare status or other fields)
+                if (typeof newItem === 'object' && typeof oldItem === 'object') {
+                    const isModified = JSON.stringify(oldItem) !== JSON.stringify(newItem);
+                    if (isModified) {
+                        modified.push({ old: oldItem, new: newItem });
+                    } else {
+                        unchanged.push(newItem);
+                    }
+                } else {
+                    unchanged.push(newItem);
+                }
+            }
+        });
+
+        const hasChanges = added.length > 0 || removed.length > 0 || modified.length > 0;
+
+        return {
+            changeType: hasChanges ? 'modified' : 'unchanged',
+            added,
+            removed,
+            modified,
+            unchanged,
+            oldCount: oldArr.length,
+            newCount: newArr.length
+        };
+    }
+
+    /**
+     * Compare object fields (timeline, budget)
+     */
+    private compareObjectField(oldObj: any = {}, newObj: any = {}) {
+        if (!oldObj && !newObj) {
+            return { changeType: 'unchanged', changes: {} };
+        }
+
+        if (!oldObj) {
+            return { changeType: 'added', old: null, new: newObj };
+        }
+
+        if (!newObj) {
+            return { changeType: 'removed', old: oldObj, new: null };
+        }
+
+        const changes: any = {};
+        const allKeys = new Set([...Object.keys(oldObj), ...Object.keys(newObj)]);
+
+        allKeys.forEach(key => {
+            const oldValue = oldObj[key];
+            const newValue = newObj[key];
+
+            if (oldValue !== newValue) {
+                changes[key] = { old: oldValue, new: newValue };
+            }
+        });
+
+        const hasChanges = Object.keys(changes).length > 0;
+
+        return {
+            changeType: hasChanges ? 'modified' : 'unchanged',
+            changes,
+            old: oldObj,
+            new: newObj
+        };
+    }
 }
 
 export default new SpecService();

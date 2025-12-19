@@ -23,6 +23,17 @@ export interface DailySummaryData {
     client: string;
     dueDate?: string;
     priority?: string;
+    status?: string;
+  }>;
+  activeSpecs?: Array<{
+    title: string;
+    clientName: string;
+    locked: boolean;
+  }>;
+  pendingApproval?: Array<{
+    title: string;
+    clientName: string;
+    hasSpec: boolean;
   }>;
   urgentFollowUpsList: Array<{
     clientName: string;
@@ -64,15 +75,63 @@ class SummaryService {
   }
 
   /**
-   * Generate daily summary for a user
+   * Check if summary should be sent now based on user's timezone and preferred time
    */
-  async generateDailySummary(userId: string): Promise<DailySummary | null> {
+  async shouldSendSummaryNow(
+    userId: string,
+    preferredTime: string,
+    timezone: string
+  ): Promise<boolean> {
+    try {
+      // Check if summary already sent today
+      const today = new Date().toISOString().split('T')[0];
+      const existingResult = await query(
+        `SELECT * FROM daily_summaries
+         WHERE user_id = $1 AND summary_date = $2`,
+        [userId, today]
+      );
+
+      if (existingResult.rows.length > 0) {
+        return false; // Already sent today
+      }
+
+      // Get current time in user's timezone
+      const now = new Date();
+      const userTimeString = now.toLocaleString('en-US', { timeZone: timezone });
+      const userTime = new Date(userTimeString);
+
+      // Extract hour and minute from preferred time (HH:MM:SS format)
+      const [hours, minutes] = preferredTime.split(':').map(Number);
+
+      // Check if current hour matches preferred hour (within the same hour window)
+      if (userTime.getHours() === hours) {
+        logger.info('Time to send summary for user', {
+          userId,
+          timezone,
+          preferredTime,
+          currentUserTime: userTime.toLocaleTimeString(),
+        });
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      logger.error('Error checking if should send summary:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Generate daily summary for a user
+   * @param force - If true, bypass duplicate check and send even if already sent today
+   */
+  async generateDailySummary(userId: string, force: boolean = false): Promise<DailySummary | null> {
     try {
       logger.info(`Generating daily summary for user ${userId}`);
 
       // Get user info and preferences
       const userResult = await query(
-        `SELECT u.id, u.name, u.email, up.daily_summary_enabled
+        `SELECT u.id, u.email, up.daily_summary_enabled
          FROM users u
          LEFT JOIN user_preferences up ON u.id = up.user_id
          WHERE u.id = $1`,
@@ -92,32 +151,47 @@ class SummaryService {
         return null;
       }
 
-      // Check if summary already exists for today
+      // Check if summary already exists for today (unless force=true)
       const today = new Date().toISOString().split('T')[0];
-      const existingResult = await query(
-        `SELECT * FROM daily_summaries
-         WHERE user_id = $1 AND summary_date = $2`,
-        [userId, today]
-      );
 
-      if (existingResult.rows.length > 0) {
-        logger.info(`Daily summary already exists for user ${userId} on ${today}`);
-        return this.mapSummary(existingResult.rows[0]);
+      if (!force) {
+        const existingResult = await query(
+          `SELECT * FROM daily_summaries
+           WHERE user_id = $1 AND summary_date = $2`,
+          [userId, today]
+        );
+
+        if (existingResult.rows.length > 0) {
+          logger.info(`Daily summary already exists for user ${userId} on ${today}`);
+          return this.mapSummary(existingResult.rows[0]);
+        }
       }
 
       // Gather data for summary
       const summaryData = await this.gatherSummaryData(userId);
 
       // Generate AI summary text
-      const summaryText = await this.generateAISummary(user.name, summaryData);
+      // Extract name from email (part before @) or use 'there'
+      const userName = user.email ? user.email.split('@')[0] : 'there';
+      const summaryText = await this.generateAISummary(userName, summaryData);
 
-      // Save summary to database
+      // Save summary to database (upsert if force=true)
       const result = await query(
         `INSERT INTO daily_summaries (
           user_id, summary_date, summary_text, summary_data,
           tasks_due_today, tasks_due_tomorrow, pending_follow_ups, active_clients,
           created_at
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+        ON CONFLICT (user_id, summary_date)
+        DO UPDATE SET
+          summary_text = EXCLUDED.summary_text,
+          summary_data = EXCLUDED.summary_data,
+          tasks_due_today = EXCLUDED.tasks_due_today,
+          tasks_due_tomorrow = EXCLUDED.tasks_due_tomorrow,
+          pending_follow_ups = EXCLUDED.pending_follow_ups,
+          active_clients = EXCLUDED.active_clients,
+          email_sent = false,
+          sent_at = NULL
         RETURNING *`,
         [
           userId,
@@ -229,18 +303,65 @@ class SummaryService {
         [userId]
       );
 
-      // Get recent tasks (last 3 days)
+      // Get high-priority active tasks
       const recentTasksResult = await query(
         `SELECT
           t.title,
           c.name as client,
           t.due_date,
-          t.priority
+          t.priority,
+          t.status
          FROM tasks t
          LEFT JOIN clients c ON t.client_id = c.id
          WHERE t.user_id = $1
-         AND t.created_at >= NOW() - INTERVAL '3 days'
-         ORDER BY t.created_at DESC
+         AND t.status NOT IN ('completed', 'cancelled')
+         AND (
+           t.due_date <= NOW() + INTERVAL '3 days'
+           OR t.priority = 'high'
+           OR t.priority = 'urgent'
+         )
+         ORDER BY
+           CASE t.priority
+             WHEN 'urgent' THEN 1
+             WHEN 'high' THEN 2
+             WHEN 'medium' THEN 3
+             ELSE 4
+           END,
+           t.due_date ASC NULLS LAST
+         LIMIT 10`,
+        [userId]
+      );
+
+      // Get active specs/projects
+      const activeSpecsResult = await query(
+        `SELECT
+          ps.id,
+          ps.project_name,
+          ps.client_id,
+          c.name as client_name,
+          ps.status,
+          ps.locked_at
+         FROM project_specs ps
+         LEFT JOIN clients c ON ps.client_id = c.id
+         WHERE ps.user_id = $1
+         AND ps.status != 'locked'
+         ORDER BY ps.updated_at DESC
+         LIMIT 5`,
+        [userId]
+      );
+
+      // Get pending tasks awaiting approval
+      const pendingApprovalResult = await query(
+        `SELECT
+          pt.title,
+          pt.description,
+          c.name as client_name,
+          pt.spec_id
+         FROM pending_tasks pt
+         LEFT JOIN clients c ON pt.client_id = c.id
+         WHERE pt.user_id = $1
+         AND pt.status = 'pending'
+         ORDER BY pt.created_at DESC
          LIMIT 5`,
         [userId]
       );
@@ -297,6 +418,17 @@ class SummaryService {
           client: row.client,
           dueDate: row.due_date,
           priority: row.priority,
+          status: row.status,
+        })),
+        activeSpecs: activeSpecsResult.rows.map((row: any) => ({
+          title: row.project_name,
+          clientName: row.client_name,
+          status: row.status,
+        })),
+        pendingApproval: pendingApprovalResult.rows.map((row: any) => ({
+          title: row.title,
+          clientName: row.client_name,
+          hasSpec: !!row.spec_id,
         })),
         urgentFollowUpsList: urgentFollowUpsListResult.rows.map((row: any) => ({
           clientName: row.client_name,
@@ -326,36 +458,39 @@ class SummaryService {
     data: DailySummaryData
   ): Promise<string> {
     try {
-      const prompt = `Generate a friendly, concise daily briefing for ${userName}, a freelancer managing client work.
+      const prompt = `Generate a professional work brief organized by priority. Use clean formatting with minimal emojis.
 
-**Today's Data:**
+**Work Data:**
 - Tasks due today: ${data.tasksDueToday}
 - Tasks due tomorrow: ${data.tasksDueTomorrow}
 - Tasks due this week: ${data.tasksDueThisWeek}
 - Overdue tasks: ${data.overdueTasks}
-- Pending follow-ups: ${data.pendingFollowUps}
-- Urgent follow-ups: ${data.urgentFollowUps}
-- Active clients: ${data.activeClients}
-- At-risk clients: ${data.atRiskClients}
 
-${data.urgentFollowUpsList.length > 0 ? `**Urgent Follow-ups:**
-${data.urgentFollowUpsList.map(f => `- ${f.clientName}: ${f.daysSinceMessage} days since last message (urgency: ${f.urgencyScore}/10)`).join('\n')}` : ''}
+${data.recentTasks.length > 0 ? `**Task Details:**
+${data.recentTasks.slice(0, 10).map(t => `- ${t.title}${t.client ? ` (${t.client})` : ''}${t.priority ? ` - ${t.priority.toUpperCase()}` : ''}${t.dueDate ? ` - Due ${new Date(t.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}`).join('\n')}` : ''}
 
-${data.atRiskClientsList.length > 0 ? `**At-Risk Clients:**
-${data.atRiskClientsList.map(c => `- ${c.name}: Health score ${c.healthScore}/100 - ${c.reason}`).join('\n')}` : ''}
+${data.activeSpecs && data.activeSpecs.length > 0 ? `**Active Projects:**
+${data.activeSpecs.map(s => `- ${s.title}${s.clientName ? ` (${s.clientName})` : ''}`).join('\n')}` : ''}
 
-${data.recentTasks.length > 0 ? `**Recent Tasks:**
-${data.recentTasks.map(t => `- ${t.title}${t.client ? ` (${t.client})` : ''}`).join('\n')}` : ''}
+${data.pendingApproval && data.pendingApproval.length > 0 ? `**Awaiting Approval:**
+${data.pendingApproval.slice(0, 5).map(p => `- ${p.title}${p.clientName ? ` (${p.clientName})` : ''}`).join('\n')}` : ''}
 
-**Instructions:**
-1. Start with a warm greeting
-2. Highlight the most important items first (urgent follow-ups, at-risk clients, overdue tasks)
-3. Provide actionable recommendations
-4. Keep it under 150 words
-5. Use a friendly, encouraging tone
-6. End with a motivating note
+**Format Requirements:**
+Organize as clean bullet-point sections:
 
-Generate the briefing:`;
+**Due Today** (${data.tasksDueToday})
+${data.tasksDueToday > 0 ? '[List each task with client name]' : '- No tasks due today'}
+
+**Due This Week** (${data.tasksDueThisWeek})
+${data.tasksDueThisWeek > 0 ? '[List tasks with due dates]' : '- No tasks due this week'}
+
+${data.overdueTasks > 0 ? '**Overdue** (' + data.overdueTasks + ')\n[List overdue tasks]' : ''}
+
+${data.pendingApproval && data.pendingApproval.length > 0 ? '**Awaiting Approval**\n[List items pending approval]' : ''}
+
+${data.activeSpecs && data.activeSpecs.length > 0 ? '**Active Projects**\n[List project names with clients]' : ''}
+
+Use professional language. No greetings, no motivational messages. Just organized work items.`;
 
       const completion = await this.openai.chat.completions.create({
         model: 'gpt-4o-mini',
@@ -363,15 +498,15 @@ Generate the briefing:`;
           {
             role: 'system',
             content:
-              'You are a helpful assistant that generates daily briefings for freelancers. Be concise, actionable, and encouraging.',
+              'You are a professional work assistant. Generate clean, organized bullet-point briefs. Use minimal emojis (max 1-2 per section). Focus on clarity and professionalism. No greetings, no motivational language - just structured work lists.',
           },
           {
             role: 'user',
             content: prompt,
           },
         ],
-        temperature: 0.7,
-        max_tokens: 500,
+        temperature: 0.5,
+        max_tokens: 800,
       });
 
       return completion.choices[0]?.message?.content || 'Summary generation failed';
@@ -418,7 +553,7 @@ Generate the briefing:`;
     data: DailySummaryData
   ): Promise<void> {
     try {
-      // Map data to template format
+      // Map data to template format, including the AI-generated summary
       const templateData = {
         tasksDueToday: data.tasksDueToday,
         tasksDueThisWeek: data.tasksDueThisWeek,
@@ -433,11 +568,15 @@ Generate the briefing:`;
           client: f.clientName,
           days: f.daysSinceMessage,
         })),
+        aiSummary: summary.summaryText, // Include the AI-generated comprehensive briefing
       };
 
-      const emailOptions = notificationService.templates.dailyDigest(user.name, templateData);
+      // Extract name from email (part before @) or use 'there'
+      const userName = user.email ? user.email.split('@')[0] : 'there';
+      const emailOptions = notificationService.templates.dailyDigest(userName, templateData);
 
-      await notificationService.sendEmail(emailOptions);
+      // Set the recipient email address
+      await notificationService.sendEmail({ ...emailOptions, to: user.email });
 
       // Mark as sent
       await query(

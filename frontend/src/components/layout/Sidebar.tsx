@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Users, CheckSquare, Mail, Settings, Zap, Activity, Bell, Server, FileText } from 'lucide-react';
+import { Home, Users, CheckSquare, /* Mail, */ Settings, Zap, /* Activity, Server, */ FileText, Bell } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -12,12 +12,13 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: Home },
   { href: '/clients', label: 'Clients', icon: Users },
   { href: '/tasks', label: 'Tasks', icon: CheckSquare },
-  { href: '/emails', label: 'Emails', icon: Mail },
-  { href: '/follow-ups', label: 'Follow-ups', icon: Bell },
+  // { href: '/emails', label: 'Emails', icon: Mail },
+  // { href: '/follow-ups', label: 'Follow-ups', icon: Bell },
   { href: '/automation', label: 'Automation', icon: Zap },
-  { href: '/activity', label: 'Activity', icon: Activity },
+  // { href: '/activity', label: 'Activity', icon: Activity },
   { href: '/specs', label: 'Specs', icon: FileText },
-  { href: '/queue', label: 'Queue', icon: Server },
+  // { href: '/queue', label: 'Queue', icon: Server },
+  { href: '/notification-preferences', label: 'Notifications', icon: Bell },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 

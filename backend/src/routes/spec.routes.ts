@@ -26,11 +26,15 @@ router.post('/:id/sync-trello', specController.syncToTrello);
 // Get version history
 router.get('/:id/versions', specController.getVersions);
 
+// Compare two versions
+router.get('/:id/versions/compare', specController.compareVersions);
+
 // Chat with spec
 router.post('/:id/chat', specController.chatWithSpec);
 
 // Scope Creep Alerts
 router.get('/:specId/alerts', requireAuth, scopeCreepController.getAlerts);
 router.post('/alerts/:id/resolve', requireAuth, scopeCreepController.resolveAlert);
+router.post('/alerts/:id/generate-response', requireAuth, scopeCreepController.generateResponse);
 
 export default router;

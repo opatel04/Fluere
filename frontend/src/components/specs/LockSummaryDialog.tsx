@@ -196,10 +196,10 @@ export const LockSummaryDialog: React.FC<LockSummaryDialogProps> = ({
                                         </Badge>
                                     </h4>
                                     <ul className="space-y-1">
-                                        {content.exclusions.map((item) => (
-                                            <li key={item.id} className="flex items-start gap-2 text-sm">
+                                        {content.exclusions.map((item, idx) => (
+                                            <li key={typeof item === 'string' ? idx : item.id} className="flex items-start gap-2 text-sm">
                                                 <span className="text-red-400">✕</span>
-                                                <span>{item.description}</span>
+                                                <span>{typeof item === 'string' ? item : item.description}</span>
                                             </li>
                                         ))}
                                     </ul>

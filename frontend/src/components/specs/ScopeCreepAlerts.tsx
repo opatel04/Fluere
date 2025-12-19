@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, Check, X, DollarSign, FileText } from 'lucide-react';
+import { AlertTriangle, X, DollarSign, FileText, Sparkles } from 'lucide-react';
 import { specApi } from '@/lib/api/spec';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ResponseGeneratorDialog } from './ResponseGeneratorDialog';
 
 interface ScopeCreepAlert {
     id: string;
@@ -15,11 +16,14 @@ interface ScopeCreepAlert {
 
 interface ScopeCreepAlertsProps {
     specId: string;
+    onSpecUpdated?: () => void;
 }
 
-export const ScopeCreepAlerts: React.FC<ScopeCreepAlertsProps> = ({ specId }) => {
+export const ScopeCreepAlerts: React.FC<ScopeCreepAlertsProps> = ({ specId, onSpecUpdated }) => {
     const [alerts, setAlerts] = useState<ScopeCreepAlert[]>([]);
     const [loading, setLoading] = useState(true);
+    const [showResponseDialog, setShowResponseDialog] = useState(false);
+    const [selectedAlert, setSelectedAlert] = useState<ScopeCreepAlert | null>(null);
 
     useEffect(() => {
         loadAlerts();
@@ -42,6 +46,11 @@ export const ScopeCreepAlerts: React.FC<ScopeCreepAlertsProps> = ({ specId }) =>
             await specApi.resolveScopeCreepAlert(alertId, resolution);
             // Remove from list
             setAlerts(prev => prev.filter(a => a.id !== alertId));
+
+            // If spec was updated, notify parent to refresh
+            if (resolution === 'spec_updated' && onSpecUpdated) {
+                onSpecUpdated();
+            }
         } catch (error) {
             console.error('Failed to resolve alert', error);
         }
@@ -99,7 +108,17 @@ export const ScopeCreepAlerts: React.FC<ScopeCreepAlertsProps> = ({ specId }) =>
                             </div>
                         </div>
 
-                        <div className="mt-4 flex gap-2">
+                        <div className="mt-4 flex gap-2 flex-wrap">
+                            <button
+                                onClick={() => {
+                                    setSelectedAlert(alert);
+                                    setShowResponseDialog(true);
+                                }}
+                                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+                            >
+                                <Sparkles className="w-3 h-3" />
+                                Generate Response
+                            </button>
                             <button
                                 onClick={() => handleResolve(alert.id, 'billed')}
                                 className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
@@ -125,6 +144,14 @@ export const ScopeCreepAlerts: React.FC<ScopeCreepAlertsProps> = ({ specId }) =>
                     </motion.div>
                 ))}
             </AnimatePresence>
+
+            {selectedAlert && (
+                <ResponseGeneratorDialog
+                    open={showResponseDialog}
+                    onOpenChange={setShowResponseDialog}
+                    alert={selectedAlert}
+                />
+            )}
         </div>
     );
 };

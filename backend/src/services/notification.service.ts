@@ -434,62 +434,51 @@ This task has been added to your Trello board.`,
         atRiskClients: number;
         recentTasks: Array<{ title: string; client: string; due_date?: string }>;
         urgentFollowUps: Array<{ client: string; days: number }>;
+        aiSummary?: string;
       }
     ) => ({
       to: '',
-      subject: `Your Daily Briefing - ${new Date().toLocaleDateString()}`,
+      subject: `Daily Brief · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h1 style="color: #333;">Good Morning, ${userName}! ☀️</h1>
-          <p style="color: #666; font-size: 16px;">
-            Here's your daily briefing for ${new Date().toLocaleDateString()}:
-          </p>
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; background-color: #ffffff;">
 
-          <!-- Overview Stats -->
-          <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
-            <h3 style="margin: 0 0 15px 0; color: #333;">Today's Overview</h3>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-              <div>
-                <span style="font-size: 24px; color: #e74c3c;">${data.tasksDueToday}</span>
-                <p style="margin: 0; color: #666; font-size: 14px;">Tasks Due Today</p>
-              </div>
-              <div>
-                <span style="font-size: 24px; color: #f39c12;">${data.tasksDueThisWeek}</span>
-                <p style="margin: 0; color: #666; font-size: 14px;">Due This Week</p>
-              </div>
-              <div>
-                <span style="font-size: 24px; color: #3498db;">${data.followUpsNeeded}</span>
-                <p style="margin: 0; color: #666; font-size: 14px;">Follow-ups Needed</p>
-              </div>
-              <div>
-                <span style="font-size: 24px; color: ${data.atRiskClients > 0 ? '#e74c3c' : '#27ae60'}">${
-        data.atRiskClients
-      }</span>
-                <p style="margin: 0; color: #666; font-size: 14px;">At-Risk Clients</p>
-              </div>
+          <!-- Fluere Branding -->
+          <div style="margin-bottom: 32px;">
+            <div style="color: #0f172a; font-size: 22px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 4px;">Fluere</div>
+            <div style="color: #64748b; font-size: 13px;">Daily Work Brief</div>
+          </div>
+
+          <!-- Date Header -->
+          <div style="margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px solid #e2e8f0;">
+            <div style="color: #0f172a; font-size: 15px; font-weight: 600;">
+              ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
             </div>
           </div>
 
-          <!-- Recent Tasks -->
+          <!-- Stats Row -->
+          <div style="margin-bottom: 32px;">
+            <table cellpadding="0" cellspacing="0" style="width: 100%;">
+              <tr>
+                <td style="width: 48%; padding: 20px; background-color: ${data.tasksDueToday > 0 ? '#fef2f2' : '#f8fafc'}; border-radius: 8px; border: 1px solid ${data.tasksDueToday > 0 ? '#fecaca' : '#e2e8f0'}; vertical-align: top;">
+                  <div style="color: #64748b; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Due Today</div>
+                  <div style="color: ${data.tasksDueToday > 0 ? '#dc2626' : '#0f172a'}; font-size: 28px; font-weight: 700;">${data.tasksDueToday}</div>
+                </td>
+                <td style="width: 4%;"></td>
+                <td style="width: 48%; padding: 20px; background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; vertical-align: top;">
+                  <div style="color: #64748b; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">This Week</div>
+                  <div style="color: #0f172a; font-size: 28px; font-weight: 700;">${data.tasksDueThisWeek}</div>
+                </td>
+              </tr>
+            </table>
+          </div>
+
+          <!-- AI Summary -->
           ${
-            data.recentTasks.length > 0
+            data.aiSummary
               ? `
-          <div style="margin: 20px 0;">
-            <h3 style="color: #333;">Recent Tasks</h3>
-            ${data.recentTasks
-              .slice(0, 5)
-              .map(
-                (task) => `
-              <div style="border-left: 3px solid #0079bf; padding: 10px; margin: 10px 0; background-color: #f9f9f9;">
-                <strong style="color: #333;">${task.title}</strong>
-                <p style="margin: 5px 0 0 0; color: #666; font-size: 14px;">
-                  Client: ${task.client}
-                  ${task.due_date ? ` • Due: ${new Date(task.due_date).toLocaleDateString()}` : ''}
-                </p>
-              </div>
-            `
-              )
-              .join('')}
+          <div style="margin-bottom: 32px;">
+            <div style="color: #0f172a; font-size: 13px; font-weight: 600; margin-bottom: 16px;">Today's Focus</div>
+            <div style="color: #334155; font-size: 14px; line-height: 1.8; white-space: pre-wrap;">${data.aiSummary.replace(/\*\*(.*?)\*\*/g, '<strong style="color: #0f172a; font-weight: 600;">$1</strong>').replace(/\n/g, '<br>')}</div>
           </div>
           `
               : ''
@@ -499,18 +488,17 @@ This task has been added to your Trello board.`,
           ${
             data.urgentFollowUps.length > 0
               ? `
-          <div style="margin: 20px 0;">
-            <h3 style="color: #e74c3c;">⚠️ Urgent Follow-ups</h3>
+          <div style="margin-bottom: 32px; padding: 20px; background-color: #fef2f2; border-radius: 8px; border-left: 3px solid #ef4444;">
+            <div style="color: #991b1b; font-size: 13px; font-weight: 600; margin-bottom: 16px;">Urgent Follow-ups</div>
+            <div style="color: #64748b; font-size: 12px; margin-bottom: 16px;">${data.urgentFollowUps.length} client${data.urgentFollowUps.length > 1 ? 's' : ''} need${data.urgentFollowUps.length === 1 ? 's' : ''} attention</div>
             ${data.urgentFollowUps
               .slice(0, 5)
               .map(
                 (followUp) => `
-              <div style="border-left: 3px solid #e74c3c; padding: 10px; margin: 10px 0; background-color: #fff5f5;">
-                <strong style="color: #e74c3c;">${followUp.client}</strong>
-                <p style="margin: 5px 0 0 0; color: #666; font-size: 14px;">
-                  No response for ${followUp.days} days
-                </p>
-              </div>
+            <div style="padding: 12px 0; border-top: 1px solid #fee2e2;">
+              <div style="color: #0f172a; font-size: 14px; font-weight: 500; margin-bottom: 4px;">${followUp.client}</div>
+              <div style="color: #64748b; font-size: 12px;">${followUp.days} days without response</div>
+            </div>
             `
               )
               .join('')}
@@ -519,14 +507,13 @@ This task has been added to your Trello board.`,
               : ''
           }
 
-          <p style="color: #666; font-size: 16px; margin-top: 30px;">
-            Have a productive day! 🚀
-          </p>
+          <!-- Footer -->
+          <div style="margin-top: 48px; padding-top: 24px; border-top: 1px solid #e2e8f0; text-align: center;">
+            <div style="color: #94a3b8; font-size: 12px;">
+              © ${new Date().getFullYear()} Fluere · Intelligent Work Management
+            </div>
+          </div>
 
-          <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-          <p style="color: #999; font-size: 12px;">
-            This is your automated daily briefing from TaskSnap.
-          </p>
         </div>
       `,
       text: `Good Morning, ${userName}!

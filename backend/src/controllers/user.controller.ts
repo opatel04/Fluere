@@ -105,3 +105,42 @@ export const getAccountStats = asyncHandler(async (req: Request, res: Response):
     stats: userData.stats,
   });
 });
+
+/**
+ * Get user preferences
+ * GET /api/v1/users/preferences
+ */
+export const getPreferences = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  // userId is guaranteed by extractUserId middleware
+  const userId = (req as any).userId;
+
+  const preferences = await userService.getPreferences(userId);
+
+  successResponse(res, { preferences });
+});
+
+/**
+ * Update user preferences
+ * PUT /api/v1/users/preferences
+ */
+export const updatePreferences = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  // userId is guaranteed by extractUserId middleware
+  const userId = (req as any).userId;
+
+  const updatedPreferences = await userService.updatePreferences(userId, req.body);
+
+  successResponse(res, { preferences: updatedPreferences }, 'Preferences updated successfully');
+});
+
+/**
+ * Send test daily summary email
+ * POST /api/v1/users/test-daily-summary
+ */
+export const sendTestDailySummary = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  // userId is guaranteed by extractUserId middleware
+  const userId = (req as any).userId;
+
+  await userService.sendTestDailySummary(userId);
+
+  successResponse(res, { message: 'Test email sent successfully. Check your inbox!' });
+});

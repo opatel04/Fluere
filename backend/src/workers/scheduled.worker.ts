@@ -115,9 +115,12 @@ dailySummaryQueue.process(async (job: Job<DailySummaryJob>) => {
 
       return { userId, summary };
     } else {
-      // Generate for all users
+      // Generate for users whose preferred time matches current hour in their timezone
       const users = await query(
-        `SELECT u.id, u.email, u.name, up.daily_summary_enabled
+        `SELECT u.id, u.email,
+                up.daily_summary_enabled,
+                up.daily_summary_time,
+                up.daily_summary_timezone
          FROM users u
          LEFT JOIN user_preferences up ON u.id = up.user_id
          WHERE u.is_active = true
@@ -125,10 +128,28 @@ dailySummaryQueue.process(async (job: Job<DailySummaryJob>) => {
       );
 
       let totalGenerated = 0;
+      let totalChecked = 0;
       const results = [];
 
       for (const user of users.rows) {
         try {
+          totalChecked++;
+
+          // Get user's preferred time and timezone
+          const preferredTime = user.daily_summary_time || '08:00:00';
+          const timezone = user.daily_summary_timezone || 'UTC';
+
+          // Check if it's time to send for this user
+          const shouldSend = await summaryService.shouldSendSummaryNow(
+            user.id,
+            preferredTime,
+            timezone
+          );
+
+          if (!shouldSend) {
+            continue; // Skip this user, not their time yet
+          }
+
           const summary = await summaryService.generateDailySummary(user.id);
           if (summary) {
             totalGenerated++;
@@ -142,6 +163,8 @@ dailySummaryQueue.process(async (job: Job<DailySummaryJob>) => {
           logger.info('Daily summary generated for user', {
             userId: user.id,
             email: user.email,
+            timezone,
+            preferredTime,
             generated: summary !== null,
           });
         } catch (error: any) {
@@ -157,13 +180,14 @@ dailySummaryQueue.process(async (job: Job<DailySummaryJob>) => {
         }
       }
 
-      logger.info('Daily summary generation completed for all users', {
-        totalUsers: users.rows.length,
+      logger.info('Daily summary generation completed', {
+        totalChecked,
         totalGenerated,
+        results: results.length,
       });
 
       return {
-        totalUsers: users.rows.length,
+        totalChecked,
         totalGenerated,
         results,
       };

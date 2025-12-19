@@ -162,6 +162,79 @@ class SpecController {
             next(error);
         }
     }
+
+    /**
+     * Compare two spec versions
+     * GET /api/v1/specs/:id/versions/compare?v1=1&v2=2
+     */
+    async compareVersions(req: Request, res: Response, next: NextFunction): Promise<void> {
+        try {
+            const { id } = req.params;
+            const { v1, v2 } = req.query;
+            const userId = req.userId;
+
+            if (!userId) throw new Error('User not authenticated');
+
+            // Validate query parameters
+            if (!v1 || !v2) {
+                res.status(400).json({
+                    success: false,
+                    error: 'Both v1 and v2 query parameters are required'
+                });
+                return;
+            }
+
+            const version1 = parseInt(v1 as string);
+            const version2 = parseInt(v2 as string);
+
+            if (isNaN(version1) || isNaN(version2)) {
+                res.status(400).json({
+                    success: false,
+                    error: 'Version numbers must be valid integers'
+                });
+                return;
+            }
+
+            if (version1 === version2) {
+                res.status(400).json({
+                    success: false,
+                    error: 'Cannot compare a version with itself'
+                });
+                return;
+            }
+
+            // Verify user owns the spec
+            const spec = await specService.getSpec(id);
+            if (spec.spec.user_id !== userId) {
+                res.status(403).json({
+                    success: false,
+                    error: 'Access denied'
+                });
+                return;
+            }
+
+            const comparison = await specService.compareVersions(id, version1, version2);
+
+            // Disable caching for comparison results
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+
+            res.status(200).json({
+                success: true,
+                data: comparison
+            });
+        } catch (error: any) {
+            if (error.message === 'One or both versions not found') {
+                res.status(404).json({
+                    success: false,
+                    error: 'One or both versions not found'
+                });
+                return;
+            }
+            next(error);
+        }
+    }
 }
 
 export default new SpecController();
