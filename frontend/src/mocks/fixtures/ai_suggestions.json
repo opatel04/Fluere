@@ -1,0 +1,17 @@
+[
+  {
+    "id": "s_1",
+    "email_id": "e_1",
+    "title": "Send pricing",
+    "confidence": 0.92,
+    "preview": "Prepare quote for product X"
+  },
+  {
+    "id": "s_2",
+    "email_id": "e_2",
+    "title": "Schedule meeting",
+    "confidence": 0.88,
+    "preview": "Coordinate Q4 review call"
+  }
+]
+

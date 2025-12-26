@@ -1,0 +1,440 @@
+﻿Frontend SPEC SHEET — for development in Cursor / Windsurf
+(Backend link-up later — this doc contains everything frontend devs need now to build the UI/UX)
+________________
+
+
+Quick context
+You’ll be building the TaskSnap frontend in a separate repo/workspace using Cursor or Windsurf as your dev environment/AI-assisted IDE. This spec gives the UI/UX context, concrete components, mock data contracts, interactions, accessibility, testing targets, and engineering conventions so work can start immediately without any backend readiness.
+________________
+
+
+1 — Priorities (what must be implemented first)
+1. Project scaffold, Tailwind, shadcn/ui init, Storybook.
+
+2. Auth UI + protected layout (UI-only; use mock GET /users/profile).
+
+3. Clients list + client detail (UI + behavior).
+
+4. Tasks list & Kanban (draggable UI).
+
+5. Email processing UI + AI-extraction flow (UI-only, accept/reject with local mocks).
+
+6. Settings (profile + integrations UI-only).
+
+7. Component library + stories + fixtures.
+
+________________
+
+
+2 — Tools / tech choices (what Cursor/Windsurf will help with)
+   * Next.js 14 (App Router) + TypeScript
+
+   * TailwindCSS 3.x (design tokens, spacing scale, radii, elevation only — no colors)
+
+   * shadcn/ui + Radix for accessible primitives
+
+   * Zustand for local/app state (auth, UI flags)
+
+   * TanStack Query for server data (will consume mocks locally)
+
+   * React Hook Form + Zod for forms/validation
+
+   * Axios for HTTP client (used only for stubs/mocks now)
+
+   * lucide-react icons
+
+   * Storybook for component catalog
+
+   * DnD: @dnd-kit/core (keyboard accessible) or react-beautiful-dnd if preferred
+
+Cursor/Windsurf will accelerate generating components, tests, and repetitive code, but feed them the spec below and the fixtures.
+________________
+
+
+3 — What the frontend must own right now
+      * Complete UI component library with props, stories, and tests.
+
+      * Mock data layer that simulates minimal API shapes (JSON fixtures + a local mock server or msw).
+
+      * Routing and protected layouts (auth guard UI-only).
+
+      * All UX states: default, loading, empty, error, disabled.
+
+      * Accessibility baseline (keyboard, ARIA, focus styles).
+
+      * Responsive behavior (mobile/tablet/desktop).
+
+      * Test coverage for critical flows (auth, create client, create task, accept AI tasks).
+
+      * Analytics event wrapper (no external telemetry required now).
+
+      * Feature flags (local config) for toggling Kanban/email UI.
+
+________________
+
+
+4 — Pages & exact components to build (deliverable checklist)
+Build these pages and components (in this order):
+Core pages
+         * /login, /signup (AuthLayout)
+
+         * /dashboard (stats row, activity feed)
+
+         * /clients (list + filters + bulk actions)
+
+         * /clients/[id] (client detail with tabs)
+
+         * /tasks (kanban + list)
+
+         * /emails (list + detail + AI-extracted tasks)
+
+         * /settings (profile, integrations UI-only)
+
+Primitives (stories + tests)
+            * Button (primary, secondary, ghost, destructive) — loading prop
+
+            * Input, Textarea, Select, Checkbox, Switch
+
+            * Card, Modal/Dialog, Tabs, Badge, Avatar, Progress, Table, Skeleton, Toast
+
+            * DropdownMenu, Sheet (mobile drawer), ScrollArea
+
+            * Icon wrapper (consistent sizing + aria)
+
+Domain components
+               * StatsCard
+
+               * HealthScoreIndicator (radial)
+
+               * ClientStatusBadge
+
+               * ClientCard & ClientTableRow
+
+               * TaskCard (draggable)
+
+               * KanbanColumn + KanbanBoard
+
+               * EmailThreadCard + EmailDetailPanel
+
+               * ActivityItem / TimelineItem
+
+               * EmptyState & LoadingState
+
+UX helpers
+                  * ConfirmDialog (type: destructive)
+
+                  * InlineCopy (email/phone copy button)
+
+                  * DateBadge / RelativeTime component
+
+                  * ClientSearch with URL-synced filters
+
+________________
+
+
+5 — Interactions & UX rules (exact behavior)
+                     * Loading: skeleton lists/cards; spinner on buttons.
+
+                     * Forms: Zod validation + show server/field errors beneath input.
+
+                     * Modals: trap focus, ESC closes, background click closes (confirm destructive requires explicit action).
+
+                     * Notifications: toast system (aria-live="polite").
+
+                     * Optimistic updates: for create/complete tasks (rollback on mock failure).
+
+                     * Drag & drop: keyboard accessible, fallback move menu.
+
+                     * Pagination: page & limit mock; infinite scroll optional.
+
+                     * Filters/URL: search & filters persisted in query string (so devs can share URLs).
+
+                     * Offline: show a persistent banner if navigator is offline (UI-only).
+
+                     * Responsiveness:
+
+                        * <768px mobile: sidebar hidden, sheet for navigation, dialogs full-screen.
+
+                        * 768–1024px tablet: collapsible sidebar.
+
+                        * >1024px desktop: full sidebar + multi-column grid.
+
+________________
+
+
+6 — Accessibility (must-haves)
+                           * All interactive elements keyboard navigable and labeled.
+
+                           * Use semantic HTML (headings, lists).
+
+                           * Modals use role="dialog" and aria-modal.
+
+                           * Tablist for tabs with role="tablist".
+
+                           * Buttons and icon-only controls have aria-label.
+
+                           * Focus visible; respects prefers-reduced-motion.
+
+                           * Color-independent state indicators (icons or badges) — avoid color-only cues.
+
+________________
+
+
+7 — Minimal API shapes to mock (frontend will use these fixtures now)
+Auth
+                              * POST /auth/login request { email, password }
+
+                              * Response success:
+
+{ "success": true, "data": { "user": { "id":"u_1","name":"Alex","email":"alex@x.com" } } }
+
+
+                                 * GET /users/profile → returns same user object.
+
+Clients list
+                                    * GET /clients?status=&search=&page=&limit= → returns:
+
+{
+  "success": true,
+  "data": {
+    "clients": [ /* array of client objects below */ ],
+    "meta": { "page": 1, "limit": 20, "total": 47 }
+  }
+}
+
+
+Client object:
+{
+  "id":"c_1","name":"Acme Corp","email":"acct@acme.com","company":"Acme",
+  "phone":null,"health_score":72,"last_contact":"2025-11-01T12:34:00Z",
+  "total_emails":42,"total_tasks":8,"open_tasks":3,"status":"active",
+  "created_at":"2024-06-10T09:00:00Z","updated_at":"2025-10-30T09:00:00Z"
+}
+
+
+Client detail
+                                       * GET /clients/:id → { success: true, data: { client: {...}, recent_activity: [...], emails_count, tasks_count } }
+
+Tasks
+                                          * GET /tasks?client_id=&status=&page=
+
+                                          * POST /tasks req: { client_id, title, description, due_date, priority }
+
+                                          * Task object:
+
+{
+  "id":"t_1","title":"Follow up","description":"Call","status":"open",
+  "priority":"medium","due_date":"2025-11-07T12:00:00Z","client_id":"c_1",
+  "created_at":"2025-11-01T10:00:00Z"
+}
+
+
+Emails
+                                             * GET /clients/:id/emails?processed=false&page=
+
+                                             * Email object:
+
+{
+  "id":"e_1","from":"john@ex.com","to":["me@tasksnap.com"],
+  "subject":"Request for quote","preview":"Hi — can you send pricing for ...",
+  "body_html":"<p>Full HTML body</p>","timestamp":"2025-11-03T12:00:00Z","has_tasks":true
+}
+
+
+AI extraction
+                                                * POST /ai/extract-manual req { email_id }
+
+                                                * Response:
+
+{ "success": true, "data": { "suggested_tasks": [
+  { "id":"s_1","title":"Send pricing","confidence":0.92,"preview":"Prepare quote for product X" }
+] } }
+
+
+Frontend: map suggestions to local POST /tasks calls (mock).
+Notes on mocks
+                                                   * Use msw (Mock Service Worker) or an in-repo mock server.
+
+                                                   * Provide fixtures: users.json, clients.json, tasks.json, emails.json, ai_suggestions.json.
+
+________________
+
+
+8 — Component prop contracts (examples — copy into code)
+Example StatsCard props:
+type StatsCardProps = {
+  title: string;
+  value: string | number;
+  trend?: string; // e.g. "+12%"
+  trendUp?: boolean;
+  icon?: ReactNode;
+  loading?: boolean;
+};
+
+
+Example ClientCard props:
+type ClientCardProps = {
+  client: {
+    id: string;
+    name: string | null;
+    email: string;
+    company?: string | null;
+    health_score: number;
+    last_contact?: string | null;
+    total_emails: number;
+    total_tasks: number;
+    open_tasks: number;
+    status: 'active' | 'at_risk' | 'churned';
+  };
+  onView?: (id: string) => void;
+  onEdit?: (id: string) => void;
+};
+
+
+Example TaskCard props:
+type TaskCardProps = {
+  task: { id:string; title:string; priority:'high'|'medium'|'low'; due_date?:string; client_id?:string; status:string; };
+  draggable?: boolean;
+  onEdit?: (id:string) => void;
+  onToggleComplete?: (id:string)=>void;
+};
+
+
+________________
+
+
+9 — Storybook & fixtures (deliverable)
+                                                      * Storybook stories for each primitive + domain component showing: default, loading, empty, error, mobile viewport.
+
+                                                      * Fixtures folder structure:
+
+/mocks
+  users.json
+  clients.json
+  tasks.json
+  emails.json
+  ai_suggestions.json
+
+
+                                                         * Provide an msw setup file that maps the minimal endpoints above to fixtures.
+
+________________
+
+
+10 — Testing (must-have tests)
+                                                            * Unit tests for primitives & domain components (Vitest + React Testing Library).
+
+                                                            * Integration tests for:
+
+                                                               * Auth success/failure
+
+                                                               * Clients list + open client detail
+
+                                                               * Create task + show in list/kanban
+
+                                                               * Email AI extract accept flow
+
+                                                                  * Accessibility tests with jest-axe or axe-core in CI for main pages.
+
+________________
+
+
+11 — Git & PR conventions (short)
+                                                                     * Branch naming: feature/<short-desc>, fix/<id>, chore/<id>.
+
+                                                                     * PR must include: Storybook link / screenshots, unit tests, accessibility checklist, responsive screenshots (mobile/tablet/desktop).
+
+                                                                     * Add CHANGELOG.md entries for visible UI changes.
+
+________________
+
+
+12 — Local dev & environment (what to include now)
+                                                                        * .env.local.example:
+
+NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1  # used by axios, but msw overrides in dev
+NEXT_PUBLIC_APP_NAME=TaskSnap
+FEATURE_FLAGS=kanban,email_integration
+
+
+                                                                           * npm run dev starts Next dev server (port 3001 recommended).
+
+                                                                           * npm run storybook opens Storybook.
+
+                                                                           * npm run test runs unit tests.
+
+________________
+
+
+13 — Analytics & instrumentation (frontend-only)
+                                                                              * Provide a tiny wrapper lib/analytics.ts:
+
+export function track(event:string, payload?: Record<string,any>) {
+  // console.log or push to in-memory events store for dev
+}
+
+
+                                                                                 * Events to emit: page_view, create_client, create_task, accept_ai_task, login_success, api_error.
+
+________________
+
+
+14 — Feature flags (local)
+                                                                                    * Local JSON or env-based flags:
+
+{ "kanban_enabled": true, "email_integration_ui": true, "ai_extraction_ui": true }
+
+
+                                                                                       * Read flags from src/config/featureFlags.ts.
+
+________________
+
+
+15 — Delivery artifacts you should hand off to other teams later
+(Produce but don’t require backend now)
+                                                                                          * OpenAPI/Swagger expectations file (minimal) — frontend provides example request/response shapes above for backend to implement later.
+
+                                                                                          * locales/en.json with all UI strings (copy-ready).
+
+                                                                                          * Storybook URL + test coverage report.
+
+                                                                                          * Mock server (msw) setup + fixtures.
+
+________________
+
+
+16 — Sprint-ready checklist (paste into sprint ticket)
+                                                                                             * Project scaffold & styles configured
+
+                                                                                             * Component library (primitives) + Storybook stories
+
+                                                                                             * Auth UI + protected routes (mocked)
+
+                                                                                             * Clients list + filters + client detail UI (mocked)
+
+                                                                                             * Tasks: Kanban + List + Task modal (mocked)
+
+                                                                                             * Emails: list, detail, AI suggestions UI (mocked)
+
+                                                                                             * Accessibility baseline & tests added
+
+                                                                                             * Fixtures + msw mock server included
+
+                                                                                             * Unit + integration tests for critical flows
+
+                                                                                             * PR template checks for accessibility, responsiveness, storybook, tests
+
+________________
+
+
+17 — Next steps I can produce for you now
+Pick one (I’ll generate immediately):
+                                                                                                * A ready-to-drop locales/en.json skeleton with all UI copy keys.
+
+                                                                                                * msw handlers file + example clients.json and tasks.json fixtures.
+
+                                                                                                * A Storybook-ready StatsCard + ClientCard component (TSX + story + test).
+
+                                                                                                * A one-page README.md for the frontend repo with run commands and the mock API contract.
+
+Tell me which artifact you want first and I’ll create it now.

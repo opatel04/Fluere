@@ -2,6 +2,9 @@ import { Request, Response } from 'express';
 import taskSortService, { SortOption, FilterOption } from '../services/task-sort.service';
 import logger from '../config/logger';
 import { ExtractedTask } from '../types/ai.types';
+import { asyncHandler } from '../middleware/errorHandler';
+import { successResponse, successWithCount, createdResponse, listResponse } from '../utils/responses';
+import { ValidationError } from '../types/errors';
 
 /**
  * Task Sorting Controller
@@ -12,22 +15,11 @@ class TaskSortController {
    * GET /api/tasks/sort/options
    * Get available sort and filter options
    */
-  async getOptions(req: Request, res: Response): Promise<void> {
-    try {
-      const options = taskSortService.getAvailableOptions();
+  getOptions = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const options = taskSortService.getAvailableOptions();
 
-      res.status(200).json({
-        success: true,
-        data: options,
-      });
-    } catch (error) {
-      logger.error('Error getting sort options:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to get sort options',
-      });
-    }
-  }
+    successResponse(res, options);
+  });
 
   /**
    * POST /api/tasks/sort
@@ -40,45 +32,30 @@ class TaskSortController {
    *   "filters": ["urgent", "overdue", etc.]
    * }
    */
-  async sortTasks(req: Request, res: Response): Promise<void> {
-    try {
-      const { tasks, sortBy, filters, userTimezone, userCurrentDate } = req.body;
+  sortTasks = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const { tasks, sortBy, filters, userTimezone, userCurrentDate } = req.body;
 
-      // Validate input
-      if (!tasks || !Array.isArray(tasks)) {
-        res.status(400).json({
-          success: false,
-          error: 'Tasks array is required',
-        });
-        return;
-      }
-
-      // Sort and filter tasks
-      const sortedTasks = taskSortService.sortAndFilter(tasks, {
-        sortBy: sortBy as SortOption,
-        filters: filters as FilterOption[],
-        userTimezone,
-        userCurrentDate,
-      });
-
-      res.status(200).json({
-        success: true,
-        data: {
-          tasks: sortedTasks,
-          count: sortedTasks.length,
-          originalCount: tasks.length,
-          sortBy,
-          filters,
-        },
-      });
-    } catch (error) {
-      logger.error('Error sorting tasks:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to sort tasks',
-      });
+    // Validate input
+    if (!tasks || !Array.isArray(tasks)) {
+      throw new ValidationError('Tasks array is required');
     }
-  }
+
+    // Sort and filter tasks
+    const sortedTasks = taskSortService.sortAndFilter(tasks, {
+      sortBy: sortBy as SortOption,
+      filters: filters as FilterOption[],
+      userTimezone,
+      userCurrentDate,
+    });
+
+    successResponse(res, {
+      tasks: sortedTasks,
+      count: sortedTasks.length,
+      originalCount: tasks.length,
+      sortBy,
+      filters,
+    });
+  });
 
   /**
    * POST /api/tasks/sort/chat
@@ -90,53 +67,34 @@ class TaskSortController {
    *   "prompt": "Show me urgent tasks first"
    * }
    */
-  async sortByChat(req: Request, res: Response): Promise<void> {
-    try {
-      const { tasks, prompt, userTimezone, userCurrentDate } = req.body;
+  sortByChat = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const { tasks, prompt, userTimezone, userCurrentDate } = req.body;
 
-      // Validate input
-      if (!tasks || !Array.isArray(tasks)) {
-        res.status(400).json({
-          success: false,
-          error: 'Tasks array is required',
-        });
-        return;
-      }
-
-      if (!prompt || typeof prompt !== 'string') {
-        res.status(400).json({
-          success: false,
-          error: 'Prompt is required',
-        });
-        return;
-      }
-
-      // Process chat sort request
-      const result = await taskSortService.sortByChat({
-        tasks,
-        prompt,
-        userTimezone,
-        userCurrentDate,
-      });
-
-      res.status(200).json({
-        success: true,
-        data: {
-          tasks: result.sortedTasks,
-          count: result.sortedTasks.length,
-          originalCount: tasks.length,
-          explanation: result.explanation,
-          sortCriteria: result.sortCriteria,
-        },
-      });
-    } catch (error) {
-      logger.error('Error processing chat sort:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to process chat sort request',
-      });
+    // Validate input
+    if (!tasks || !Array.isArray(tasks)) {
+      throw new ValidationError('Tasks array is required');
     }
-  }
+
+    if (!prompt || typeof prompt !== 'string') {
+      throw new ValidationError('Prompt is required');
+    }
+
+    // Process chat sort request
+    const result = await taskSortService.sortByChat({
+      tasks,
+      prompt,
+      userTimezone,
+      userCurrentDate,
+    });
+
+    successResponse(res, {
+      tasks: result.sortedTasks,
+      count: result.sortedTasks.length,
+      originalCount: tasks.length,
+      explanation: result.explanation,
+      sortCriteria: result.sortCriteria,
+    });
+  });
 }
 
 export default new TaskSortController();

@@ -7,6 +7,7 @@ import { testRedisConnection } from '../config/redis';
 
 // Import workers (this will start listening to queues)
 import './email.worker';
+import './scheduled.worker';
 
 const startWorkers = async () => {
   try {

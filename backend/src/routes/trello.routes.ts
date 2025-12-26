@@ -1,12 +1,17 @@
 import { Router } from 'express';
 import { apiLimiter } from '../middleware/rateLimiter';
+import { authenticateToken, extractUserId } from '../middleware/auth.middleware';
 import * as trelloController from '../controllers/trello.controller';
 import { verifyTrelloWebhook, webhookRateLimiter, webhookLogger } from '../middleware/webhookVerification';
 
 const router = Router();
 
+// All Trello routes require authentication (except webhooks which use their own verification)
+router.use(authenticateToken);
+router.use(extractUserId);
+
 // Board routes
-router.get('/boards', trelloController.getBoards);
+router.get('/boards', apiLimiter, trelloController.getBoards);
 router.get('/boards/:boardId', trelloController.getBoard);
 router.get('/boards/:boardId/lists', trelloController.getLists);
 router.get('/boards/:boardId/labels', trelloController.getLabels);

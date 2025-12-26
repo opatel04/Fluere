@@ -29,6 +29,23 @@ export interface EmailTemplate {
   ) => EmailOptions;
   boardConnected: (userName: string, boardName: string) => EmailOptions;
   automationTriggered: (userName: string, automationName: string, result: string) => EmailOptions;
+  taskCreated: (
+    userName: string,
+    taskTitle: string,
+    clientName: string,
+    dueDate?: string
+  ) => EmailOptions;
+  dailyDigest: (
+    userName: string,
+    data: {
+      tasksDueToday: number;
+      tasksDueThisWeek: number;
+      followUpsNeeded: number;
+      atRiskClients: number;
+      recentTasks: Array<{ title: string; client: string; due_date?: string }>;
+      urgentFollowUps: Array<{ client: string; days: number }>;
+    }
+  ) => EmailOptions;
 }
 
 class NotificationService {
@@ -364,6 +381,180 @@ Your automation "${automationName}" has been triggered.
 
 ${result}`,
     }),
+
+    taskCreated: (userName: string, taskTitle: string, clientName: string, dueDate?: string) => ({
+      to: '',
+      subject: `New Task from ${clientName}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #333;">New Task Created 📋</h1>
+          <p style="color: #666; font-size: 16px;">
+            Hi ${userName},
+          </p>
+          <p style="color: #666; font-size: 16px;">
+            A new task has been automatically created from your client email:
+          </p>
+          <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
+            <h3 style="margin: 0 0 10px 0; color: #333;">${taskTitle}</h3>
+            <p style="margin: 5px 0; color: #666;">
+              <strong>Client:</strong> ${clientName}
+            </p>
+            ${
+              dueDate
+                ? `<p style="margin: 5px 0; color: #e67e22;">
+                     <strong>Due:</strong> ${new Date(dueDate).toLocaleDateString()}
+                   </p>`
+                : ''
+            }
+          </div>
+          <p style="color: #666; font-size: 16px;">
+            This task has been added to your Trello board.
+          </p>
+        </div>
+      `,
+      text: `New Task Created
+
+Hi ${userName},
+
+A new task has been automatically created from your client email:
+
+Task: ${taskTitle}
+Client: ${clientName}
+${dueDate ? `Due: ${new Date(dueDate).toLocaleDateString()}` : ''}
+
+This task has been added to your Trello board.`,
+    }),
+
+    dailyDigest: (
+      userName: string,
+      data: {
+        tasksDueToday: number;
+        tasksDueThisWeek: number;
+        followUpsNeeded: number;
+        atRiskClients: number;
+        recentTasks: Array<{ title: string; client: string; due_date?: string }>;
+        urgentFollowUps: Array<{ client: string; days: number }>;
+        aiSummary?: string;
+      }
+    ) => ({
+      to: '',
+      subject: `Daily Brief · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; background-color: #ffffff;">
+
+          <!-- Fluere Branding -->
+          <div style="margin-bottom: 32px;">
+            <div style="color: #0f172a; font-size: 22px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 4px;">Fluere</div>
+            <div style="color: #64748b; font-size: 13px;">Daily Work Brief</div>
+          </div>
+
+          <!-- Date Header -->
+          <div style="margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px solid #e2e8f0;">
+            <div style="color: #0f172a; font-size: 15px; font-weight: 600;">
+              ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+            </div>
+          </div>
+
+          <!-- Stats Row -->
+          <div style="margin-bottom: 32px;">
+            <table cellpadding="0" cellspacing="0" style="width: 100%;">
+              <tr>
+                <td style="width: 48%; padding: 20px; background-color: ${data.tasksDueToday > 0 ? '#fef2f2' : '#f8fafc'}; border-radius: 8px; border: 1px solid ${data.tasksDueToday > 0 ? '#fecaca' : '#e2e8f0'}; vertical-align: top;">
+                  <div style="color: #64748b; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Due Today</div>
+                  <div style="color: ${data.tasksDueToday > 0 ? '#dc2626' : '#0f172a'}; font-size: 28px; font-weight: 700;">${data.tasksDueToday}</div>
+                </td>
+                <td style="width: 4%;"></td>
+                <td style="width: 48%; padding: 20px; background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; vertical-align: top;">
+                  <div style="color: #64748b; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">This Week</div>
+                  <div style="color: #0f172a; font-size: 28px; font-weight: 700;">${data.tasksDueThisWeek}</div>
+                </td>
+              </tr>
+            </table>
+          </div>
+
+          <!-- AI Summary -->
+          ${
+            data.aiSummary
+              ? `
+          <div style="margin-bottom: 32px;">
+            <div style="color: #0f172a; font-size: 13px; font-weight: 600; margin-bottom: 16px;">Today's Focus</div>
+            <div style="color: #334155; font-size: 14px; line-height: 1.8; white-space: pre-wrap;">${data.aiSummary.replace(/\*\*(.*?)\*\*/g, '<strong style="color: #0f172a; font-weight: 600;">$1</strong>').replace(/\n/g, '<br>')}</div>
+          </div>
+          `
+              : ''
+          }
+
+          <!-- Urgent Follow-ups -->
+          ${
+            data.urgentFollowUps.length > 0
+              ? `
+          <div style="margin-bottom: 32px; padding: 20px; background-color: #fef2f2; border-radius: 8px; border-left: 3px solid #ef4444;">
+            <div style="color: #991b1b; font-size: 13px; font-weight: 600; margin-bottom: 16px;">Urgent Follow-ups</div>
+            <div style="color: #64748b; font-size: 12px; margin-bottom: 16px;">${data.urgentFollowUps.length} client${data.urgentFollowUps.length > 1 ? 's' : ''} need${data.urgentFollowUps.length === 1 ? 's' : ''} attention</div>
+            ${data.urgentFollowUps
+              .slice(0, 5)
+              .map(
+                (followUp) => `
+            <div style="padding: 12px 0; border-top: 1px solid #fee2e2;">
+              <div style="color: #0f172a; font-size: 14px; font-weight: 500; margin-bottom: 4px;">${followUp.client}</div>
+              <div style="color: #64748b; font-size: 12px;">${followUp.days} days without response</div>
+            </div>
+            `
+              )
+              .join('')}
+          </div>
+          `
+              : ''
+          }
+
+          <!-- Footer -->
+          <div style="margin-top: 48px; padding-top: 24px; border-top: 1px solid #e2e8f0; text-align: center;">
+            <div style="color: #94a3b8; font-size: 12px;">
+              © ${new Date().getFullYear()} Fluere · Intelligent Work Management
+            </div>
+          </div>
+
+        </div>
+      `,
+      text: `Good Morning, ${userName}!
+
+Here's your daily briefing for ${new Date().toLocaleDateString()}:
+
+TODAY'S OVERVIEW:
+- Tasks Due Today: ${data.tasksDueToday}
+- Due This Week: ${data.tasksDueThisWeek}
+- Follow-ups Needed: ${data.followUpsNeeded}
+- At-Risk Clients: ${data.atRiskClients}
+
+${
+  data.recentTasks.length > 0
+    ? `
+RECENT TASKS:
+${data.recentTasks
+  .slice(0, 5)
+  .map(
+    (task) =>
+      `- ${task.title} (${task.client})${task.due_date ? ` - Due: ${new Date(task.due_date).toLocaleDateString()}` : ''}`
+  )
+  .join('\n')}
+`
+    : ''
+}
+
+${
+  data.urgentFollowUps.length > 0
+    ? `
+URGENT FOLLOW-UPS:
+${data.urgentFollowUps
+  .slice(0, 5)
+  .map((followUp) => `- ${followUp.client} (No response for ${followUp.days} days)`)
+  .join('\n')}
+`
+    : ''
+}
+
+Have a productive day! 🚀`,
+    }),
   };
 
   /**
@@ -433,6 +624,39 @@ ${result}`,
     result: string
   ): Promise<boolean> {
     const template = this.templates.automationTriggered(userName, automationName, result);
+    return this.sendEmail({ ...template, to: email });
+  }
+
+  /**
+   * Send task created notification
+   */
+  async sendTaskCreated(
+    email: string,
+    userName: string,
+    taskTitle: string,
+    clientName: string,
+    dueDate?: string
+  ): Promise<boolean> {
+    const template = this.templates.taskCreated(userName, taskTitle, clientName, dueDate);
+    return this.sendEmail({ ...template, to: email });
+  }
+
+  /**
+   * Send daily digest notification
+   */
+  async sendDailyDigest(
+    email: string,
+    userName: string,
+    data: {
+      tasksDueToday: number;
+      tasksDueThisWeek: number;
+      followUpsNeeded: number;
+      atRiskClients: number;
+      recentTasks: Array<{ title: string; client: string; due_date?: string }>;
+      urgentFollowUps: Array<{ client: string; days: number }>;
+    }
+  ): Promise<boolean> {
+    const template = this.templates.dailyDigest(userName, data);
     return this.sendEmail({ ...template, to: email });
   }
 }

@@ -166,7 +166,7 @@ class InboundEmailService {
         errorMessage: error.message,
         durationMs: Date.now() - startTime,
       });
-
+      
       return {
         success: false,
         inboundEmailId: inboundEmailId || 'unknown',

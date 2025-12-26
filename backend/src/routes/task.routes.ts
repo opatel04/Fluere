@@ -1,33 +1,46 @@
 import { Router } from 'express';
+import { authenticateToken, extractUserId } from '../middleware/auth.middleware';
 import { apiLimiter } from '../middleware/rateLimiter';
-// import * as taskController from '../controllers/task.controller';
+import * as pendingTaskController from '../controllers/pending-task.controller';
 
 const router = Router();
 
-// Task management routes
-router.post('/create', apiLimiter, (req, res) => {
-  res.json({ message: 'Create task endpoint - to be implemented' });
-});
+/**
+ * Task Routes
+ * Base path: /api/v1/tasks
+ *
+ * Manages pending tasks (extracted by automation, awaiting approval)
+ */
 
-router.get('/', (req, res) => {
-  res.json({ message: 'List tasks endpoint - to be implemented' });
-});
+// All task routes require authentication
+router.use(authenticateToken);
+router.use(extractUserId);
 
-router.get('/:id', (req, res) => {
-  res.json({ message: `Get task ${req.params.id} endpoint - to be implemented` });
-});
+// Pending tasks - Statistics (must be before :id routes)
+router.get('/pending/stats', pendingTaskController.getPendingTaskStats);
 
-router.put('/:id', (req, res) => {
-  res.json({ message: `Update task ${req.params.id} endpoint - to be implemented` });
-});
+// Pending tasks - Bulk operations
+router.post('/pending/bulk', apiLimiter, pendingTaskController.createPendingTasksBulk);
+router.post('/pending/approve-bulk', apiLimiter, pendingTaskController.approvePendingTasksBulk);
+router.post('/pending/reject-bulk', apiLimiter, pendingTaskController.rejectPendingTasksBulk);
 
-router.delete('/:id', (req, res) => {
-  res.json({ message: `Delete task ${req.params.id} endpoint - to be implemented` });
-});
+// Pending tasks - List and create
+router.get('/pending', pendingTaskController.getPendingTasks);
+router.post('/pending', apiLimiter, pendingTaskController.createPendingTask);
 
-// Bulk operations
-router.post('/bulk/create', apiLimiter, (req, res) => {
-  res.json({ message: 'Bulk create tasks endpoint - to be implemented' });
-});
+// Pending tasks - Single task operations
+router.get('/pending/:id', pendingTaskController.getPendingTaskById);
+router.put('/pending/:id', apiLimiter, pendingTaskController.updatePendingTask);
+router.delete('/pending/:id', apiLimiter, pendingTaskController.deletePendingTask);
+
+// Pending tasks - Approve/Reject
+router.post('/pending/:id/approve', apiLimiter, pendingTaskController.approvePendingTask);
+router.post('/pending/:id/reject', apiLimiter, pendingTaskController.rejectPendingTask);
+
+// Pending tasks - One-click workflow: Generate spec and approve in one action
+router.post('/pending/:id/generate-and-approve', apiLimiter, pendingTaskController.generateAndApprovePendingTask);
+
+// Pending tasks - Generate AI description on-demand (lazy loading)
+router.post('/pending/:id/generate', apiLimiter, pendingTaskController.generateTaskDescription);
 
 export default router;

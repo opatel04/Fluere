@@ -667,6 +667,35 @@ class TrelloService {
   }
 
   /**
+   * Get connection status with user details
+   */
+  async getConnectionStatus(userId: string): Promise<{
+    connected: boolean;
+    username?: string;
+    fullName?: string;
+  }> {
+    try {
+      const result = await query(
+        'SELECT username, full_name FROM trello_tokens WHERE user_id = $1',
+        [userId]
+      );
+
+      if (result.rows.length === 0) {
+        return { connected: false };
+      }
+
+      return {
+        connected: true,
+        username: result.rows[0].username,
+        fullName: result.rows[0].full_name,
+      };
+    } catch (error) {
+      logger.error('Error getting Trello connection status:', error);
+      return { connected: false };
+    }
+  }
+
+  /**
    * Search for cards across boards
    */
   async searchCards(
@@ -694,6 +723,146 @@ class TrelloService {
     } catch (error) {
       logger.error('Error searching Trello cards:', error);
       throw new Error('Failed to search Trello cards');
+    }
+  }
+
+  /**
+   * Get or create labels by name
+   */
+  async getOrCreateLabels(
+    userId: string,
+    boardId: string,
+    labelNames: string[]
+  ): Promise<string[]> {
+    try {
+      if (!labelNames || labelNames.length === 0) {
+        return [];
+      }
+
+      // Get existing labels
+      const existingLabels = await this.getLabels(userId, boardId);
+      const labelIds: string[] = [];
+
+      // Trello colors for new labels (cycle through them)
+      const colors = ['green', 'yellow', 'orange', 'red', 'purple', 'blue', 'sky', 'lime', 'pink', 'black'];
+
+      for (let i = 0; i < labelNames.length; i++) {
+        const name = labelNames[i];
+        const existing = existingLabels.find(
+          l => l.name.toLowerCase() === name.toLowerCase()
+        );
+
+        if (existing) {
+          labelIds.push(existing.id);
+        } else {
+          // Create new label
+          const color = colors[i % colors.length];
+          const newLabel = await this.createLabel(userId, boardId, name, color);
+          labelIds.push(newLabel.id);
+        }
+      }
+
+      return labelIds;
+    } catch (error) {
+      logger.error('Error resolving Trello labels:', error);
+      // Don't fail the whole process if label creation fails, just return what we have or empty
+      return [];
+    }
+  }
+
+  /**
+   * Add an attachment to a card (e.g. link or file)
+   */
+  async addAttachment(
+    userId: string,
+    cardId: string,
+    url?: string,
+    name?: string,
+    file?: string // Base64 or binary content could be handled here if needed, but Trello API usually takes URL or file upload
+  ): Promise<any> {
+    try {
+      const client = await this.getClient(userId);
+      const params: any = {};
+
+      if (url) params.url = url;
+      if (name) params.name = name;
+
+      const response = await client.post(`/cards/${cardId}/attachments`, null, { params });
+
+      logger.info(`Added attachment to card ${cardId}`);
+      return response.data;
+    } catch (error) {
+      logger.error('Error adding attachment to Trello card:', error);
+      throw new Error('Failed to add attachment to Trello card');
+    }
+  }
+
+  /**
+   * Create a checklist on a card
+   */
+  async createChecklist(
+    userId: string,
+    cardId: string,
+    name: string
+  ): Promise<{ id: string; name: string }> {
+    try {
+      const client = await this.getClient(userId);
+
+      const response = await client.post(`/cards/${cardId}/checklists`, null, {
+        params: { name },
+      });
+
+      logger.info(`Created checklist "${name}" on card ${cardId}`);
+      return response.data;
+    } catch (error) {
+      logger.error('Error creating Trello checklist:', error);
+      throw new Error('Failed to create Trello checklist');
+    }
+  }
+
+  /**
+   * Add an item to a checklist
+   */
+  async addChecklistItem(
+    userId: string,
+    checklistId: string,
+    name: string,
+    checked: boolean = false
+  ): Promise<any> {
+    try {
+      const client = await this.getClient(userId);
+
+      const response = await client.post(`/checklists/${checklistId}/checkItems`, null, {
+        params: {
+          name,
+          checked: checked.toString(),
+        },
+      });
+
+      logger.info(`Added item "${name}" to checklist ${checklistId}`);
+      return response.data;
+    } catch (error) {
+      logger.error('Error adding checklist item:', error);
+      throw new Error('Failed to add checklist item');
+    }
+  }
+
+  /**
+   * Add multiple items to a checklist at once
+   */
+  async addChecklistItems(
+    userId: string,
+    checklistId: string,
+    items: Array<{ name: string; checked?: boolean }>
+  ): Promise<void> {
+    try {
+      for (const item of items) {
+        await this.addChecklistItem(userId, checklistId, item.name, item.checked || false);
+      }
+      logger.info(`Added ${items.length} items to checklist ${checklistId}`);
+    } catch (error) {
+      logger.error('Error adding multiple checklist items:', error);
+      throw new Error('Failed to add checklist items');
     }
   }
 }

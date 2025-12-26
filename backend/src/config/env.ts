@@ -87,6 +87,15 @@ interface Config {
   resend: {
     apiKey: string;
     inboundDomain: string;
+    webhookSecret: string;
+  };
+
+  // Twilio (for SMS)
+  twilio: {
+    accountSid: string;
+    authToken: string;
+    phoneNumber: string;
+    enabled: boolean;
   };
 
   // App URL
@@ -165,6 +174,14 @@ const config: Config = {
   resend: {
     apiKey: process.env.RESEND_API_KEY || '',
     inboundDomain: process.env.RESEND_INBOUND_DOMAIN || 'tasksnap.com',
+    webhookSecret: process.env.RESEND_WEBHOOK_SECRET || '',
+  },
+
+  twilio: {
+    accountSid: process.env.TWILIO_ACCOUNT_SID || '',
+    authToken: process.env.TWILIO_AUTH_TOKEN || '',
+    phoneNumber: process.env.TWILIO_PHONE_NUMBER || '',
+    enabled: process.env.SMS_ENABLED === 'true',
   },
 
   appUrl: process.env.APP_URL || 'http://localhost:3000',

@@ -28,6 +28,14 @@ CREATE TABLE IF NOT EXISTS user_preferences (
     default_grouping VARCHAR(50) DEFAULT 'priority',
     auto_process_emails BOOLEAN DEFAULT false,
     notification_enabled BOOLEAN DEFAULT true,
+    -- Notification preferences
+    daily_summary_enabled BOOLEAN DEFAULT true,
+    daily_summary_time TIME DEFAULT '08:00:00',
+    daily_summary_timezone VARCHAR(100) DEFAULT 'UTC',
+    weekly_report_enabled BOOLEAN DEFAULT true,
+    follow_up_notifications_enabled BOOLEAN DEFAULT true,
+    follow_up_threshold_days INTEGER DEFAULT 2,
+    sentiment_analysis_enabled BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id)

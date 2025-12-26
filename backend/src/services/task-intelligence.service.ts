@@ -59,13 +59,14 @@ class TaskIntelligenceService {
     }
 
     // Add context-based labels
-    if (task.name.toLowerCase().includes('meeting')) {
+    const taskName = task.name || '';
+    if (taskName.toLowerCase().includes('meeting')) {
       labels.add('Meeting');
     }
-    if (task.name.toLowerCase().includes('review')) {
+    if (taskName.toLowerCase().includes('review')) {
       labels.add('Review Required');
     }
-    if (task.name.toLowerCase().includes('urgent') || task.priority === 'urgent') {
+    if (taskName.toLowerCase().includes('urgent') || task.priority === 'urgent') {
       labels.add('Urgent');
     }
     if (task.estimatedTime && this.parseTime(task.estimatedTime) >= 120) {
@@ -198,8 +199,8 @@ class TaskIntelligenceService {
 
   private isBlockingTask(task: ExtractedTask): boolean {
     const blockingKeywords = ['review', 'approve', 'approval', 'authorize', 'sign off'];
-    const name = task.name.toLowerCase();
-    const desc = task.description?.toLowerCase() || '';
+    const name = (task.name || '').toLowerCase();
+    const desc = (task.description || '').toLowerCase();
 
     return blockingKeywords.some(keyword =>
       name.includes(keyword) || desc.includes(keyword)

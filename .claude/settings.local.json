@@ -1,9 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "WebSearch",
-      "Bash(npm install:*)",
-      "Read(//Users/ompatel/**)"
+      "Bash(psql:*)",
+      "Bash(npm install)",
+      "Bash(npm run dev:*)",
+      "Bash(mkdir:*)",
+      "Bash(npx tsc:*)",
+      "Bash(head:*)",
+      "Bash(npm run worker:*)",
+      "Bash(npm run:*)"
     ],
     "deny": [],
     "ask": []

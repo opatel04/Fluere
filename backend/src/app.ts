@@ -5,7 +5,7 @@ import morgan from 'morgan';
 import path from 'path';
 import config from './config/env';
 import logger from './config/logger';
-import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import { globalErrorHandler, notFoundHandler } from './middleware/errorHandler';
 import { apiLimiter } from './middleware/rateLimiter';
 
 // Import routes
@@ -107,6 +107,6 @@ app.get('/', (_req: Request, res: Response) => {
 app.use(notFoundHandler);
 
 // Global error handler
-app.use(errorHandler);
+app.use(globalErrorHandler);
 
 export default app;

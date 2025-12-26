@@ -112,6 +112,89 @@ export const verifyGmailWebhook = (req: Request, res: Response, next: NextFuncti
 };
 
 /**
+ * Middleware to verify Resend (Svix) webhook signatures
+ * Resend uses Svix for webhooks, which signs with HMAC-SHA256
+ * Signatures are sent in the svix-signature header
+ */
+export const verifyResendWebhook = (req: Request, res: Response, next: NextFunction): void => {
+  try {
+    const svixSignature = req.headers['svix-signature'] as string;
+    const svixTimestamp = req.headers['svix-timestamp'] as string;
+    const svixId = req.headers['svix-id'] as string;
+
+    if (!svixSignature || !svixTimestamp || !svixId) {
+      logger.warn('Resend webhook missing required Svix headers');
+      res.status(401).json({ error: 'Missing webhook signature headers' });
+      return;
+    }
+
+    // Check if webhook secret is configured
+    if (!config.resend.webhookSecret) {
+      logger.error('RESEND_WEBHOOK_SECRET not configured');
+      res.status(500).json({ error: 'Webhook verification not configured' });
+      return;
+    }
+
+    // Prevent replay attacks - reject webhooks older than 5 minutes
+    const timestamp = parseInt(svixTimestamp, 10);
+    const currentTime = Math.floor(Date.now() / 1000);
+    const timeDiff = currentTime - timestamp;
+
+    if (timeDiff > 300) { // 5 minutes
+      logger.warn('Resend webhook timestamp too old', { timeDiff });
+      res.status(401).json({ error: 'Webhook timestamp expired' });
+      return;
+    }
+
+    if (timeDiff < -60) { // Allow 1 minute clock skew
+      logger.warn('Resend webhook timestamp in the future', { timeDiff });
+      res.status(401).json({ error: 'Invalid webhook timestamp' });
+      return;
+    }
+
+    // Construct the signed content: svix-id.svix-timestamp.body
+    const body = JSON.stringify(req.body);
+    const signedContent = `${svixId}.${svixTimestamp}.${body}`;
+
+    // Svix sends multiple signatures in format: v1,signature1 v1,signature2
+    // We need to verify against any of them
+    const signatures = svixSignature.split(' ');
+
+    let verified = false;
+    for (const sig of signatures) {
+      const [version, signature] = sig.split(',');
+
+      if (version !== 'v1') {
+        continue; // Only support v1 signatures
+      }
+
+      // Compute expected signature
+      const expectedSignature = crypto
+        .createHmac('sha256', config.resend.webhookSecret)
+        .update(signedContent, 'utf8')
+        .digest('base64');
+
+      if (signature === expectedSignature) {
+        verified = true;
+        break;
+      }
+    }
+
+    if (!verified) {
+      logger.warn('Resend webhook signature verification failed');
+      res.status(401).json({ error: 'Invalid webhook signature' });
+      return;
+    }
+
+    logger.debug('Resend webhook signature verified successfully');
+    next();
+  } catch (error) {
+    logger.error('Error verifying Resend webhook signature:', error);
+    res.status(500).json({ error: 'Webhook verification failed' });
+  }
+};
+
+/**
  * Generic webhook rate limiter to prevent webhook flooding
  * More restrictive than API rate limiting
  */

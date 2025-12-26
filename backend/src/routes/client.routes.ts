@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { apiLimiter } from '../middleware/rateLimiter';
 import * as clientController from '../controllers/client.controller';
-import { authenticateToken } from '../middleware/auth.middleware';
+import { authenticateToken, extractUserId } from '../middleware/auth.middleware';
 
 const router = Router();
 
-// All client routes require authentication
+// All client routes require authentication and userId extraction
 router.use(authenticateToken);
+router.use(extractUserId);
 
 /**
  * Client Management Routes
@@ -35,7 +36,9 @@ router.delete('/:id', apiLimiter, clientController.archiveClient);
 router.get('/:id/tasks', apiLimiter, clientController.getClientTasks);
 
 // Get all emails for a client
-router.get('/:id/emails', apiLimiter, clientController.getClientEmails);
+router.get('/:id/emails', clientController.getClientEmails);
+router.get('/:id/heatmap', clientController.getClientHeatmap);
+router.get('/:id/summary', clientController.getClientSummary);
 
 // Get activity timeline for a client
 router.get('/:id/timeline', apiLimiter, clientController.getClientTimeline);

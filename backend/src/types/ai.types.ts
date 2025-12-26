@@ -59,6 +59,51 @@ export interface ValidationIssue {
 }
 
 /**
+ * Individual scope creep detection item
+ */
+export interface ScopeCreepDetection {
+  severity: 'low' | 'medium' | 'high';
+  category: 'new_deliverable' | 'exclusion_violation' | 'timeline_change' | 'spec_expansion' | 'assumed_inclusion' | 'revision_abuse' | 'other';
+  reasoning: string; // Why this is out of scope
+  clientQuote: string; // Exact quote from email (required)
+  estimatedHours: number;
+  detectedDeviation: {
+    type: string;
+    description: string;
+    relatedSpecItem?: string; // What in the spec this relates to
+  };
+}
+
+/**
+ * Scope Creep Detection Result
+ * Now supports multiple detections per email
+ */
+export interface ScopeCreepResult {
+  hasScopeCreep: boolean; // True if any detections found
+  overallConfidence: number; // 0-1, confidence in detection accuracy
+  detections: ScopeCreepDetection[]; // Array of individual scope creep items
+  summary?: string; // Overall summary if multiple items found
+
+  // Deprecated: Kept for backwards compatibility
+  /** @deprecated Use hasScopeCreep instead */
+  isScopeCreep?: boolean;
+  /** @deprecated Use detections array instead */
+  confidence?: number;
+  /** @deprecated Use first detection severity instead */
+  severity?: 'low' | 'medium' | 'high';
+  /** @deprecated Use first detection category instead */
+  category?: string;
+  /** @deprecated Use first detection reasoning instead */
+  reasoning?: string;
+  /** @deprecated Use first detection estimatedHours instead */
+  estimatedHours?: number;
+  /** @deprecated Use first detection clientQuote instead */
+  clientQuote?: string;
+  /** @deprecated Use first detection detectedDeviation instead */
+  detectedDeviation?: any;
+}
+
+/**
  * Email processing options
  */
 export interface ProcessingOptions {

@@ -8,7 +8,9 @@ import {
   TaskExtractionResult,
   ValidationResult,
   ProcessingOptions,
+  ScopeCreepResult,
 } from '../types/ai.types';
+import { SpecContent } from '../types/spec.types';
 
 /**
  * AI Service - Layered approach for email task extraction
@@ -308,15 +310,30 @@ Respond with JSON:
 
     return `You are an expert at extracting actionable tasks from emails.
 
-Extract all actionable items, to-dos, requests, and tasks from the email.
+Extract all actionable items, to-dos, requests, deadlines, and tasks from the email.
+
+IMPORTANT - These are ALL considered actionable items that should become tasks:
+- Payment due dates (bills, credit cards, loans, subscriptions)
+- Deadlines and due dates of any kind
+- Appointments, meetings, events to attend
+- Requests or asks from the sender
+- Follow-ups needed
+- Documents to review or sign
+- Renewals (subscriptions, licenses, memberships)
+- Reminders about upcoming obligations
+- Any time-sensitive notifications
 
 For each task, determine:
-- name: Clear, concise task name
-- description: Detailed description with context
+- title: Clear, actionable task title (e.g., "Pay Chase credit card - $1,896.75")
+- description: Detailed description with context including amounts, account info, etc.
 - priority: low, medium, high, or urgent
+  * urgent: Due within 3 days or overdue
+  * high: Due within 7 days
+  * medium: Due within 30 days
+  * low: No specific deadline or far future
 - dueDate: ISO 8601 date if mentioned (e.g., "2025-01-15")
-- category: Type of task (e.g., "meeting", "code review", "documentation")
-- labels: Relevant tags
+- category: Type of task (e.g., "payment", "meeting", "review", "renewal", "deadline")
+- labels: Relevant tags (e.g., ["financial", "urgent"], ["work", "meeting"])
 - assignee: Person responsible (if mentioned)
 - estimatedTime: Time estimate if mentioned
 
@@ -324,7 +341,7 @@ Respond with JSON:
 {
   "tasks": [
     {
-      "name": string,
+      "title": string,
       "description": string,
       "priority": "low" | "medium" | "high" | "urgent",
       "dueDate": string (optional),
@@ -345,11 +362,13 @@ Respond with JSON:
 }
 
 Rules:
-- Extract ALL actionable items, even small ones
-- Infer priority from urgency language
+- Extract ALL actionable items including financial obligations, deadlines, and reminders
+- Payment due = always create a task with the amount and due date
+- Infer priority from due date proximity and urgency language
 - Parse dates in any format to ISO 8601
-- If no tasks found, return empty array
-- Be thorough but precise${focusNote}`;
+- Include specific amounts, account numbers (last 4 digits), and key details in task name/description
+- If the email contains ANY deadline or due date, create a task for it
+- Be thorough - it's better to extract too many tasks than miss important ones${focusNote}`;
   }
 
   /**
@@ -380,6 +399,573 @@ Rules:
   async extractTasksQuick(emailContent: string): Promise<ExtractedTask[]> {
     const result = await this.extractTasks(emailContent, 'gpt-4o');
     return result.tasks;
+  }
+
+  /**
+   * Quick email categorization using only subject + snippet
+   * ULTRA CHEAP: ~100 tokens = $0.0001 per email (99.5% cost reduction)
+   *
+   * Categories:
+   * - finance: Invoices, payments, billing, financial reports
+   * - coding: Code reviews, PRs, technical discussions, bug reports
+   * - accounting: Taxes, expenses, receipts, bookkeeping
+   * - legal: Contracts, agreements, compliance, terms
+   * - design: UI/UX feedback, mockups, creative assets
+   * - support: Customer questions, bug reports, help requests
+   * - partnerships: Business development, collaborations
+   * - content: Blog posts, marketing copy, social media
+   * - infrastructure: DevOps, deployments, monitoring
+   * - personal: Non-work related emails
+   */
+  async quickCategorize(subject: string, snippet: string): Promise<string> {
+    try {
+      const prompt = `Categorize this email based on ONLY the subject and snippet.
+
+Subject: ${subject}
+Snippet: ${snippet}
+
+Categories (choose ONE):
+- finance: Invoices, payments, billing, financial reports, credit cards
+- coding: Code reviews, PRs, technical discussions, bug reports, repositories
+- accounting: Taxes, expenses, receipts, bookkeeping, financial records
+- legal: Contracts, agreements, compliance, terms, policies
+- design: UI/UX feedback, mockups, creative assets, branding
+- support: Customer questions, bug reports, help requests, issues
+- partnerships: Business development, collaborations, networking
+- content: Blog posts, marketing copy, social media, newsletters
+- infrastructure: DevOps, deployments, servers, monitoring, hosting
+- personal: Non-work related emails, casual conversations
+
+Respond with ONLY the category name (single word, lowercase). No explanation.`;
+
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini', // Cheapest model
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.3,
+        max_tokens: 10, // We only need one word
+      });
+
+      const category = response.choices[0].message.content?.trim().toLowerCase() || 'personal';
+
+      logger.info(`Quick categorized email: "${subject}" → ${category}`);
+
+      return category;
+    } catch (error) {
+      logger.error('Error in quick categorization:', error);
+      return 'personal'; // Default fallback
+    }
+  }
+
+  /**
+   * Extract smart, technology-specific labels from email
+   * Uses GPT-4o-mini for fast, cheap label extraction (~$0.0001/email)
+   */
+  async extractSmartLabels(subject: string, snippet: string, category: string): Promise<string[]> {
+    try {
+      const prompt = `Extract specific labels from this email and organize them into a structured format.
+
+Email Subject: ${subject}
+Email Content: ${snippet}
+Category: ${category}
+
+IMPORTANT: Analyze the email and extract:
+1. Top 3 most relevant SKILLS or TECHNOLOGIES (e.g., "React", "Baking", "Algebra").
+2. A DEADLINE label if explicitly mentioned (e.g., "Deadline").
+3. A general CATEGORY label (e.g., "Coding", "Cooking", "Education").
+
+Return as a JSON object:
+{
+  "skills": string[], // Max 3 skills
+  "deadline": string | null, // "Deadline" or null
+  "category": string // General category
+}
+
+Example:
+{
+  "skills": ["React", "TypeScript", "Node.js"],
+  "deadline": "Deadline",
+  "category": "Coding"
+}
+
+JSON Response:`;
+
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a label extraction assistant. Extract structured labels from emails.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.3,
+        max_tokens: 200,
+      });
+
+      const content = response.choices[0]?.message?.content?.trim() || '{}';
+
+      // Parse JSON object from response
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const data = JSON.parse(jsonMatch[0]);
+        const skills = Array.isArray(data.skills) ? data.skills.slice(0, 3) : [];
+        const deadline = data.deadline ? [data.deadline] : [];
+        const categoryLabel = data.category ? [data.category] : [category];
+
+        // Combine into prioritized list: Skills (max 3) -> Deadline -> Category
+        // Then slice to ensure max 4 total
+        const labels = [...skills, ...deadline, ...categoryLabel].slice(0, 4);
+
+        logger.info(`Extracted structured labels: ${labels.join(', ')}`);
+        return labels;
+      }
+
+      // Fallback to category-based label
+      return [category];
+    } catch (error) {
+      logger.error('Error in extractSmartLabels:', error);
+      // Return basic category if AI fails
+      return ['General'];
+    }
+  }
+
+  /**
+   * Generate a concise summary of client interactions
+   */
+  async generateClientSummary(interactions: any[]): Promise<string> {
+    try {
+      if (!interactions || interactions.length === 0) {
+        return "No recent interactions to summarize.";
+      }
+
+      const context = interactions.map(i => {
+        const date = new Date(i.created_at || i.received_at).toLocaleDateString();
+        const type = i.title ? 'Task' : 'Email';
+        const content = i.title || i.subject;
+        return `[${date}] ${type}: ${content}`;
+      }).join('\n');
+
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful assistant for a freelancer. Summarize the client\'s current status and key concerns in 1 concise sentence based on the recent interactions provided. Focus on the most recent context.'
+          },
+          {
+            role: 'user',
+            content: `Recent Interactions:\n${context}`
+          }
+        ],
+        max_tokens: 100,
+        temperature: 0.5,
+      });
+
+      return response.choices[0].message.content || "Unable to generate summary.";
+    } catch (error) {
+      logger.error('Error in generateClientSummary:', error);
+      return `Unable to generate summary: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+
+  /**
+   * Generate a structured project spec from email content
+   */
+  async generateProjectSpec(emailContent: string): Promise<SpecContent> {
+    try {
+      const prompt = `You are an expert Project Manager. Create a structured project specification from this email.
+
+Email Content:
+${emailContent}
+
+Extract the following into a JSON object:
+1. project_name: A short, descriptive name for the project
+2. deliverables: List of specific items to be delivered (id, description, status='pending')
+3. specifications: List of technical requirements (id, description)
+4. client_provides: Assets or info the client will provide
+5. timeline: { start_date, delivery_date, milestones: [{date, description}] } - Use ISO dates if possible, or text
+6. budget: { total, terms }
+7. revision_rounds: Number or description of revisions included
+8. exclusions: List of specific items NOT included in scope (id, description)
+9. notes: Any other important context
+
+Rules:
+- Be precise and professional.
+- If a field is missing, leave it empty or null, do not invent information.
+- For deliverables, break them down into clear, actionable items.
+- Generate a unique ID for each item (short string).
+
+JSON Response:`;
+
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a Project Spec Generator. Output valid JSON matching the SpecContent interface.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.2,
+      });
+
+      const response = completion.choices[0].message.content;
+      if (!response) throw new Error('No response from OpenAI');
+
+      const parsed = JSON.parse(response);
+      return parsed as SpecContent;
+    } catch (error) {
+      logger.error('Error generating project spec:', error);
+      throw new Error('Failed to generate project spec');
+    }
+  }
+  /**
+   * Modify an existing project spec based on user instructions
+   */
+  async modifyProjectSpec(currentSpec: SpecContent, instruction: string): Promise<{ content: SpecContent; reply: string }> {
+    try {
+      const prompt = `You are an expert Project Manager. Update the following project specification based on the user's instruction.
+
+Current Spec:
+${JSON.stringify(currentSpec, null, 2)}
+
+User Instruction:
+"${instruction}"
+
+Rules:
+1. Update ONLY the fields relevant to the instruction.
+2. Maintain the existing structure and data for unchanged fields.
+3. If adding items (deliverables, specs, exclusions), generate a unique ID for them.
+4. Return a JSON object with two fields:
+   - "content": The fully updated SpecContent object.
+   - "reply": A brief, friendly message explaining what you changed (e.g., "I've added the login page to the deliverables.").
+
+JSON Response:`;
+
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a Project Spec Editor. Output valid JSON containing the updated content and a reply.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.2,
+      });
+
+      const response = completion.choices[0].message.content;
+      if (!response) throw new Error('No response from OpenAI');
+
+      const parsed = JSON.parse(response);
+      return {
+        content: parsed.content as SpecContent,
+        reply: parsed.reply as string
+      };
+    } catch (error) {
+      logger.error('Error modifying project spec:', error);
+      throw new Error('Failed to modify project spec');
+    }
+  }
+  /**
+   * Detect scope creep by comparing email request against locked spec
+   * Now returns an array of detections to handle multiple scope creep items per email
+   */
+  async detectScopeCreep(emailContent: string, specContent: SpecContent): Promise<ScopeCreepResult> {
+    try {
+      const prompt = `You are an expert Project Manager detecting scope creep in client emails.
+
+LOCKED PROJECT SPECIFICATION:
+${JSON.stringify(specContent, null, 2)}
+
+CLIENT EMAIL:
+${emailContent}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CRITICAL: DISTINGUISH BETWEEN QUESTIONS AND REQUESTS
+
+⚠️ DO NOT FLAG AS SCOPE CREEP:
+- Questions asking WHAT IS INCLUDED: "will you be writing tests?", "are you handling retries?"
+- Clarifications about EXISTING deliverables: "when you document errors, will that include root cause?"
+- Questions about METHODOLOGY: "will it be unit or integration tests?"
+- Requests for INFORMATION: "can you explain how X works?"
+
+✅ ONLY FLAG AS SCOPE CREEP:
+- Direct REQUESTS for new work: "could we add monitoring?", "it would be helpful if you also built..."
+- SUGGESTIONS for additional features: "we should also include...", "would be nice to have..."
+- IMPLIED EXPECTATIONS of unlisted work: "I'm assuming this includes dashboard access"
+- Politely phrased ADDITIONS: "while you're in there, maybe you could also..."
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DETECTION RULES:
+
+1. NEW DELIVERABLE - Something completely absent from the spec
+   Example: Spec has "fix errors", email asks for "admin dashboard"
+
+2. EXCLUSION VIOLATION - Requesting something explicitly excluded
+   Example: Spec excludes "mobile app", email asks for "iOS version"
+
+3. SPEC EXPANSION - Adding complexity/work to existing items
+   Example: Spec has "document errors", email asks for "interactive troubleshooting guide with videos"
+
+4. ASSUMED INCLUSION - Expecting unlisted features without agreement
+   Example: Email says "when you deploy the monitoring dashboard..." but spec has no monitoring
+
+5. REVISION ABUSE - Exceeding agreed revision limits
+   Example: Spec allows "2 revision rounds", this is the 5th revision request
+
+6. TIMELINE CHANGE - Compression without scope reduction
+   Example: Spec says "4 weeks", email asks for "can we get this in 2 weeks?"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SEVERITY CALIBRATION (BE STRICT):
+
+🔴 HIGH SEVERITY (16+ hours):
+- Major new features/systems (dashboards, monitoring systems, entire new modules)
+- Fundamental architecture changes
+- Work requiring new technologies/integrations
+- MUST impact timeline significantly
+
+🟡 MEDIUM SEVERITY (6-15 hours):
+- Moderate feature additions (email alerts, enhanced reports)
+- Significant expansions of existing features
+- New integrations or API connections
+- Additional documentation systems
+
+🟢 LOW SEVERITY (1-5 hours):
+- Minor enhancements (adding a field, small UI tweak)
+- Additional examples or basic documentation
+- Simple configuration additions
+- Quick wins that are adjacent to existing work
+
+⚪ NOT SCOPE CREEP (0 hours):
+- Clarification questions about existing deliverables
+- Asking what's included in current scope
+- Bug reports or quality issues with delivered work
+- Questions about methodology or approach
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+HOUR ESTIMATION GUIDELINES (BE REALISTIC):
+
+For EACH detection, estimate hours considering:
+
+1. ANALYSIS & PLANNING (10-20% of total)
+   - Understanding requirements
+   - Researching approach
+   - Planning implementation
+
+2. IMPLEMENTATION (50-60% of total)
+   - Writing code
+   - Building features
+   - Integration work
+
+3. TESTING (15-20% of total)
+   - Writing tests
+   - Manual testing
+   - Fixing issues found
+
+4. DOCUMENTATION (5-10% of total)
+   - Code comments
+   - User documentation
+   - Deployment notes
+
+5. DEPLOYMENT & REVIEW (5-10% of total)
+   - Code review
+   - Deployment
+   - Verification
+
+EXAMPLES OF HOUR ESTIMATES:
+
+- "Add FAQ section to docs" = 3-4 hours (LOW)
+  Analysis: 0.5h, Writing: 2h, Review: 0.5h, Formatting: 1h
+
+- "Email notification system" = 8-10 hours (MEDIUM)
+  Design: 1h, Email templates: 2h, Integration: 3h, Testing: 2h, Config: 1h, Docs: 1h
+
+- "Admin dashboard with metrics" = 20-24 hours (HIGH)
+  Design: 2h, Backend API: 6h, Frontend UI: 8h, Charts: 4h, Testing: 3h, Docs: 1h
+
+- "Basic monitoring for Redis" = 10-12 hours (MEDIUM)
+  Research: 1h, Metrics collection: 4h, Alerting: 3h, Dashboard: 2h, Testing: 1h, Docs: 1h
+
+- "Load testing implementation" = 12-15 hours (MEDIUM)
+  Setup: 2h, Script creation: 4h, Test scenarios: 3h, Running tests: 2h, Analysis: 2h, Report: 2h
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ANALYZE EACH SENTENCE in the email independently. Return ALL scope creep items as an ARRAY.
+
+OUTPUT FORMAT (JSON):
+{
+  "hasScopeCreep": boolean,
+  "overallConfidence": number (0-1, how confident are you in this detection?),
+  "detections": [
+    {
+      "severity": "low" | "medium" | "high",
+      "category": "new_deliverable" | "exclusion_violation" | "timeline_change" | "spec_expansion" | "assumed_inclusion" | "revision_abuse" | "other",
+      "reasoning": "Clear explanation WHY this is out of scope and not just a question",
+      "clientQuote": "EXACT quote from email showing the scope creep",
+      "estimatedHours": number (justified estimate with breakdown if needed),
+      "detectedDeviation": {
+        "type": "Brief category name",
+        "description": "Clear description of what they want added",
+        "relatedSpecItem": "Which spec item this relates to, or 'none' if completely new"
+      }
+    }
+  ],
+  "summary": "Optional: Overall assessment if multiple items found"
+}
+
+If NO scope creep detected, return: { "hasScopeCreep": false, "overallConfidence": 0.95, "detections": [] }`;
+
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a Scope Creep Detector. Output valid JSON with an array of all detected scope creep items.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.2,
+      });
+
+      const response = completion.choices[0].message.content;
+      if (!response) throw new Error('No response from OpenAI');
+
+      const result = JSON.parse(response) as ScopeCreepResult;
+
+      // Validate structure
+      if (!result.detections || !Array.isArray(result.detections)) {
+        logger.warn('AI returned invalid structure, detections is not an array. Defaulting to empty array.');
+        result.detections = [];
+      }
+
+      // Set hasScopeCreep based on detections array
+      result.hasScopeCreep = result.detections.length > 0;
+
+      // Backwards compatibility: populate deprecated fields from first detection
+      if (result.detections.length > 0) {
+        const firstDetection = result.detections[0];
+        result.isScopeCreep = true;
+        result.confidence = result.overallConfidence;
+        result.severity = firstDetection.severity;
+        result.category = firstDetection.category;
+        result.reasoning = firstDetection.reasoning;
+        result.clientQuote = firstDetection.clientQuote;
+        result.estimatedHours = firstDetection.estimatedHours;
+        result.detectedDeviation = firstDetection.detectedDeviation;
+      } else {
+        result.isScopeCreep = false;
+        result.confidence = result.overallConfidence;
+      }
+
+      logger.info(
+        `Scope creep detection complete: ${result.detections.length} item(s) found`,
+        { hasScopeCreep: result.hasScopeCreep, categories: result.detections.map(d => d.category) }
+      );
+
+      return result;
+    } catch (error) {
+      logger.error('Error detecting scope creep:', error);
+      // Fail safe - assume no scope creep on error to avoid spam
+      return {
+        hasScopeCreep: false,
+        overallConfidence: 0,
+        detections: [],
+        // Backwards compatibility
+        isScopeCreep: false,
+        confidence: 0,
+        severity: 'low',
+        category: 'error',
+        reasoning: 'Failed to analyze scope creep',
+      };
+    }
+  }
+
+  /**
+   * Generate professional email response for scope creep alert
+   */
+  async generateScopeCreepResponse(
+    alert: any,
+    tone: 'friendly' | 'professional' | 'firm',
+    clientName: string,
+    projectName: string
+  ): Promise<string> {
+    try {
+      const toneInstructions = {
+        friendly: 'warm, collaborative, and solution-oriented. Use friendly language while staying professional. Emphasize partnership and finding solutions together.',
+        professional: 'neutral, clear, and business-like. Maintain professional boundaries while being respectful. Present clear options without being overly warm or cold.',
+        firm: 'direct, assertive, and boundary-setting. Be polite but very clear about scope boundaries. State requirements without ambiguity while remaining respectful.',
+      };
+
+      const prompt = `You are a professional freelance developer writing an email response to a client about a scope creep issue.
+
+**Project:** ${projectName}
+**Client Name:** ${clientName}
+
+**Scope Creep Alert:**
+- **Severity:** ${alert.severity}
+- **Category:** ${alert.category}
+- **Client's Request:** "${alert.client_quote}"
+- **Why It's Out of Scope:** ${alert.ai_reasoning}
+- **Estimated Extra Work:** ${alert.estimated_hours || 'Unknown'} hours
+
+**Tone:** ${tone.toUpperCase()} - Write in a ${toneInstructions[tone]}
+
+**Your Task:**
+Write a professional email response that:
+1. Acknowledges their request positively and thanks them for sharing it
+2. Explains why this is outside the current project scope (reference what was agreed upon)
+3. Offers a solution based on tone:
+   - Friendly: "I'd be happy to add this! Based on the work involved, I estimate around ${alert.estimated_hours} hours. Want me to send over a quick quote?"
+   - Professional: "This would require additional work beyond our current agreement. I can provide options: add it to the current project for an additional fee, include it in a future phase, or handle it as a separate project."
+   - Firm: "This falls outside our current contract which specified [reference to original scope]. This would require a separate agreement and additional billing at ${alert.estimated_hours} hours."
+4. Keep it concise - aim for 3-4 short paragraphs
+5. End on a collaborative, positive note
+
+**Format Requirements:**
+- Do NOT include a subject line
+- Start with an appropriate greeting using ${clientName}
+- Use proper paragraph spacing
+- Sign off appropriately (use "Best regards," or similar)
+- Use a friendly, human tone (not robotic or overly formal)
+
+Generate the email body now:`;
+
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a professional freelance developer with excellent communication skills. Write clear, respectful emails that set boundaries while maintaining good client relationships.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.7, // Higher for more natural, varied language
+      });
+
+      const response = completion.choices[0].message.content;
+      if (!response) throw new Error('No response from OpenAI');
+
+      logger.info(`Generated ${tone} response for scope creep alert`, {
+        alertSeverity: alert.severity,
+        estimatedHours: alert.estimated_hours,
+      });
+
+      return response;
+    } catch (error) {
+      logger.error('Error generating scope creep response:', error);
+      throw new Error('Failed to generate response');
+    }
   }
 }
 

@@ -2,6 +2,7 @@ import app from './app';
 import config from './config/env';
 import logger from './config/logger';
 import { testConnection } from './config/database';
+import SchedulerService from './services/scheduler.service';
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (error: Error) => {
@@ -28,10 +29,20 @@ const server = app.listen(config.port, async () => {
 
   // Test database connection
   await testConnection();
+
+  // Initialize scheduled jobs
+  try {
+    const schedulerService = new SchedulerService();
+    await schedulerService.initializeScheduledJobs();
+    logger.info('Scheduled jobs initialized successfully');
+  } catch (error) {
+    logger.error('Failed to initialize scheduled jobs:', error);
+    // Don't exit - server can still run without scheduled jobs
+  }
 });
 
 // Handle unhandled promise rejections
-process.on('unhandledRejection', (reason: Error, promise: Promise<any>) => {
+process.on('unhandledRejection', (reason: Error) => {
   logger.error('UNHANDLED REJECTION! Shutting down...', reason);
   server.close(() => {
     process.exit(1);
