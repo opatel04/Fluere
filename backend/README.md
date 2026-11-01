@@ -80,7 +80,7 @@ npm run dev:worker
 
 The server will start on `http://localhost:3000` (or your configured PORT).
 
-**For full automation**: You need to run both the API server and the worker process. See [AUTOMATION.md](./AUTOMATION.md) for detailed setup instructions.
+**For full automation**: You need to run both the API server and the worker process.
 
 ## Building for Production
 
@@ -190,7 +190,7 @@ backend/
 │   ├── task-sort-demo.html     # Task sorting demo
 │   ├── trello-callback.html    # Trello OAuth callback
 │   └── README.md               # Public files documentation
-├── tests/               # Test files (TBD)
+├── tests/               # Backend test scripts
 ├── logs/                # Log files (auto-generated)
 ├── dist/                # Compiled JavaScript (auto-generated)
 ├── .env.example         # Example environment variables
@@ -262,7 +262,7 @@ OPENAI_MODEL=gpt-4o-mini
 - `npm run start:worker` - Start production background worker
 - `npm run lint` - Run ESLint
 - `npm run lint:fix` - Fix ESLint errors
-- `npm test` - Run tests (to be implemented)
+- `npm test` - Test command placeholder; use the scripts in `tests/` and the root testing guides
 
 ## Rate Limiting
 
@@ -309,19 +309,6 @@ Logs are stored in the `logs/` directory:
 - Verify API credentials are correct
 - Check OAuth redirect URIs match
 - Ensure tokens haven't expired
-
-## Next Steps
-
-1. ✅ Basic backend structure
-2. ✅ Gmail OAuth flow
-3. ✅ Trello OAuth flow
-4. ✅ AI service for task extraction
-5. ✅ AI-powered task sorting
-6. ✅ OAuth management dashboard UI
-7. 🔄 Set up background job processing
-8. 🔄 Implement webhook handlers
-9. 🔄 Add unit and integration tests
-10. 🔄 Add API documentation (Swagger)
 
 ## Contributing
 
