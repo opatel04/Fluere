@@ -1,127 +1,149 @@
-# TaskSnap
+# Fluere
 
-### Turn client conversations into organized, actionable work.
+### Turn client conversations into clear, actionable work.
 
-TaskSnap is an AI-powered workspace for freelancers and small teams. It helps you turn emails into tasks, keep client work organized, detect follow-ups and scope changes, and connect your workflow with Gmail and Trello.
+Fluere is an AI-powered workspace for freelancers and small teams. It turns client emails into structured tasks and project specifications, helps identify scope changes, and connects approved work to Trello.
 
-## Why TaskSnap?
+## Overview
 
-Important work often starts in an inbox and gets lost between messages, notes, and project boards. TaskSnap brings that workflow together:
+Client work often gets scattered across inboxes, notes, and project boards. Fluere brings those pieces together so you can review requests, define deliverables, and track work from one workspace.
 
-1. Connect your Gmail and Trello accounts.
-2. Let TaskSnap identify tasks and project details from email.
-3. Review, edit, prioritize, and approve the suggested work.
-4. Sync approved tasks and project specifications to Trello.
-5. Track follow-ups, activity, and scope changes from one dashboard.
+AI-generated suggestions stay under your control: review and edit tasks before approving them for Trello.
 
 ## Features
 
-- **AI email-to-task extraction** — turn client messages into structured tasks.
-- **Client workspace** — keep clients, emails, tasks, and activity connected.
-- **Smart task management** — sort, prioritize, categorize, and organize work.
-- **Project specifications** — generate specs from emails and edit them through chat.
-- **Scope-creep detection** — identify requests that go beyond the agreed project.
-- **Gmail integration** — process client conversations without manually copying details.
-- **Trello integration** — send approved work to the board and keep project links connected.
-- **Follow-up and notification support** — stay ahead of unanswered messages and deadlines.
-- **Activity tracking** — maintain a clear history of important project events.
+- **Email-to-task extraction** — Extract actionable tasks and project details from client emails.
+- **Client workspaces** — Keep client conversations, tasks, specifications, and activity connected.
+- **Task management** — Review, edit, prioritize, and categorize suggested work.
+- **AI-assisted specifications** — Generate project specifications from emails and refine them through chat.
+- **Specification versioning** — Lock agreed specifications and maintain versions as requirements evolve.
+- **Scope-change detection** — Flag incoming requests that may fall outside the agreed project.
+- **Gmail integration** — Process client conversations without manually copying their contents.
+- **Trello integration** — Sync approved tasks and link project specifications to Trello.
+- **Follow-up tracking** — Surface unanswered conversations and upcoming deadlines.
+- **Activity history** — Track important events across client projects.
 
-## Product workflow
+## How it works
 
-```text
-Client email
-    ↓
-AI extracts tasks and project details
-    ↓
-Review and edit in TaskSnap
-    ↓
-Approve the work
-    ↓
-Trello card + project tracking
-```
+1. Connect your Gmail and Trello accounts.
+2. Process client emails to extract tasks and project details.
+3. Review and refine the suggested tasks and specifications.
+4. Approve work and sync it to Trello.
+5. Monitor follow-ups, project activity, and potential scope changes.
 
-## Built with
+## Tech stack
 
-| Area | Technology |
+| Area | Technologies |
 | --- | --- |
-| Web application | Next.js 14, React, TypeScript |
+| Frontend | Next.js 14, React, TypeScript |
 | UI | Tailwind CSS, Radix UI, shadcn/ui, Framer Motion |
 | Data fetching and state | TanStack Query, Zustand, Axios |
-| API | Express 5, TypeScript |
+| Backend | Express 5, TypeScript |
 | Database | PostgreSQL |
-| Background jobs | Redis and Bull |
+| Background processing | Redis, Bull |
 | Integrations | Gmail, Trello, OpenAI, Gemini, Resend, Twilio |
-| Testing | Vitest, React Testing Library, MSW, Storybook |
+| Testing and UI development | Vitest, React Testing Library, MSW, Storybook |
 | Deployment | Railway |
 
 ## Repository structure
 
 ```text
-frontend/   Next.js web application
-backend/    Express API, workers, integrations, and database migrations
+frontend/   Next.js application
+backend/    Express API, background workers, integrations, and migrations
 ```
 
-## Try it locally
+## Local development
 
-### Requirements
+### Prerequisites
 
 - Node.js 18+
 - npm
 - PostgreSQL 14+
 - Redis 6+
-- API credentials for the integrations you want to enable
+- Credentials for the integrations you want to enable
 
-### Setup
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/opatel04/TaskSnap-v2.git
 cd TaskSnap-v2
+```
 
+### 2. Install dependencies
+
+```bash
+# Backend
 cd backend
 npm install
 cp .env.example .env
 
+# Frontend
 cd ../frontend
 npm install
 ```
 
-Configure the backend values in `backend/.env`, including your database, Redis, Gmail, Trello, and AI credentials. Then start the services in separate terminals:
+### 3. Configure the environment
+
+Update `backend/.env` with your PostgreSQL, Redis, and integration credentials. Refer to the backend and frontend documentation for package-specific configuration.
+
+Ensure PostgreSQL and Redis are running before starting the application.
+
+### 4. Start the application
+
+Run each service in a separate terminal from the repository root.
+
+**API server**
 
 ```bash
-# API server
 cd backend
 npm run dev
+```
 
-# Background worker
+**Background worker**
+
+```bash
 cd backend
 npm run dev:worker
+```
 
-# Web application
+**Frontend**
+
+```bash
 cd frontend
 npm run dev
 ```
 
-The web app runs at [http://localhost:3001](http://localhost:3001). The API runs at [http://localhost:3000](http://localhost:3000), with a health check at [http://localhost:3000/health](http://localhost:3000/health).
+### Local endpoints
+
+| Service | URL |
+| --- | --- |
+| Web application | http://localhost:3001 |
+| API | http://localhost:3000 |
+| API health check | http://localhost:3000/health |
 
 ## Documentation
 
 - [Backend setup and API overview](backend/README.md)
-- [Frontend setup and development guide](frontend/README.md)
+- [Frontend setup and development](frontend/README.md)
 - [API documentation](backend/docs/API_DOCUMENTATION.md)
 - [System architecture](backend/docs/ARCHITECTURE.md)
 - [Frontend API specification](frontend/docs/FRONTEND_API_SPEC.md)
-- [Spec and Trello linking](backend/SPEC_TRELLO_LINKING.md)
+- [Specification and Trello linking](backend/SPEC_TRELLO_LINKING.md)
 
 ## Project status
 
-TaskSnap's core workflow is implemented: email-to-task extraction, AI-assisted project specifications, chat-based editing, spec locking and versioning, Trello linking, client management, and scope-creep monitoring.
+Fluere is under active development.
 
-The project is actively evolving. Some advanced capabilities, such as attachment processing and richer edit-history experiences, are planned improvements.
+The core workflow includes email-to-task extraction, AI-assisted specifications, chat-based editing, specification locking and versioning, Trello linking, client management, and scope-change monitoring.
+
+Planned improvements include attachment processing and expanded edit-history views.
 
 ## Contributing
 
-Issues, ideas, and pull requests are welcome. Before making changes, please review the package-specific documentation and keep frontend and backend API contracts aligned.
+Issues, feature suggestions, and pull requests are welcome.
+
+Before contributing, review the frontend and backend documentation. Keep API contracts aligned when changing shared functionality.
 
 ## License
 
-The backend is released under the MIT license. The frontend is currently marked as a private application.
+The backend is released under the MIT license. The frontend is currently marked as a private application. Refer to the package-specific license files for usage and redistribution terms.
